@@ -148,6 +148,7 @@ async function loadAndRender(bytes: Uint8Array, name: string): Promise<void> {
 function startPlayback(): void {
   if (!buffer || !audioCtx) return;
   stopPlayback();
+  const seekBase = playOffsetSec; // 再生開始位置 (シーク時はシーク位置)
   const src = audioCtx.createBufferSource();
   src.buffer = buffer;
   src.connect(audioCtx.destination);
@@ -165,9 +166,9 @@ function startPlayback(): void {
   };
   source = src;
   startCtxTime = audioCtx.currentTime;
-  src.start(0, playOffsetSec);
+  src.start(0, seekBase);
   btnPlay.textContent = "⏸ 一時停止";
-  tick();
+  tick(seekBase);
 }
 
 function stopPlayback(): void {
@@ -186,13 +187,13 @@ function stopPlayback(): void {
   btnPlay.textContent = "▶ 再生";
 }
 
-function tick(): void {
+function tick(seekBase: number): void {
   if (!source || !audioCtx) return;
-  playOffsetSec = audioCtx.currentTime - startCtxTime;
+  playOffsetSec = seekBase + (audioCtx.currentTime - startCtxTime);
   if (playOffsetSec >= totalSec) playOffsetSec = totalSec;
   updateTime();
   redrawWave();
-  rafId = requestAnimationFrame(tick);
+  rafId = requestAnimationFrame(() => tick(seekBase));
 }
 
 btnPlay.addEventListener("click", () => {
