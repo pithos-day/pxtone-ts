@@ -7,6 +7,7 @@ import { Pcm } from "./pcm.js";
 import { Noise } from "./noise.js";
 import type { NoiseBuilder } from "./noise-builder.js";
 import { EVENTDEFAULT_BASICKEY } from "./event.js";
+import { PXTN_MAX_TUNEWOICENAME } from "./constants.js";
 import { Oscillator, type PulsePoint } from "./osc.js";
 
 export enum WoiceType {
@@ -141,8 +142,8 @@ export class Woice {
   setNameBuf(name: Uint8Array | string, bufSize?: number): boolean {
     const bytes = typeof name === "string" ? stringToBytes(name) : name;
     const size = bufSize ?? bytes.length;
-    if (size < 0 || size > 16) return false;
-    this._name = new Uint8Array(16);
+    if (size < 0 || size > PXTN_MAX_TUNEWOICENAME) return false;
+    this._name = new Uint8Array(PXTN_MAX_TUNEWOICENAME);
     this._name.fill(0);
     if (size) this._name.set(bytes.subarray(0, size));
     return true;

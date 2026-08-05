@@ -1,5 +1,6 @@
 import { it, expect } from "vitest";
 import { Frequency } from "../src/frequency.js";
+import { EVENTDEFAULT_KEY } from "../src/event.js";
 
 function f32Hex(v: number): string {
   const buf = new ArrayBuffer(4);
@@ -34,10 +35,10 @@ it("builds the frequency table faithfully", () => {
 it("Get / Get2 resolve keys into the table with clamping", () => {
   const f = new Frequency();
   f.init();
-  // (0x6000+0x6000)*16/256 = 3072 → clamp to末尾
-  expect(f.get(0x6000)).toBe(f.getTable()[3071]!);
+  // (EVENTDEFAULT_KEY+EVENTDEFAULT_KEY)*16/256 = 3072 → clamp to末尾
+  expect(f.get(EVENTDEFAULT_KEY)).toBe(f.getTable()[3071]!);
   // key>>4 = 1536 → オクターブ8基準=1.0
-  expect(f.get2(0x6000)).toBe(1.0);
+  expect(f.get2(EVENTDEFAULT_KEY)).toBe(1.0);
   // 最低/最高クランプ
   expect(f.get2(-0x100000)).toBe(f.getTable()[0]!);
   expect(f.get2(0x7fffffff)).toBe(f.getTable()[3071]!);

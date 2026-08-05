@@ -5,7 +5,7 @@ import { PxtnText } from "../src/text.js";
 import { Delay, DelayUnit } from "../src/delay.js";
 import { OverDrive } from "../src/overdrive.js";
 import { Evelist } from "../src/evelist.js";
-import { EventKind } from "../src/event.js";
+import { EventKind, EVENTDEFAULT_KEY } from "../src/event.js";
 import { PxtnErr } from "../src/error.js";
 
 describe("Master", () => {
@@ -116,7 +116,7 @@ describe("Evelist", () => {
   it("builds linked list and rounds trips", () => {
     const ev = new Evelist();
     expect(ev.allocate(64)).toBe(true);
-    ev.recordAddI(480, 0, EventKind.KEY, 0x6000);
+    ev.recordAddI(480, 0, EventKind.KEY, EVENTDEFAULT_KEY);
     ev.recordAddI(480, 0, EventKind.VOLUME, 104);
     ev.recordAddI(960, 0, EventKind.ON, 480); // tail
     expect(ev.count).toBe(3);

@@ -3,12 +3,13 @@ import { MemoryIo } from "../src/data.js";
 import { Woice, WoiceType, VoiceType, PTV_DATAFLAG_WAVE, PTV_DATAFLAG_ENVELOPE, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
 import { Pcm } from "../src/pcm.js";
 import { PxtnErr } from "../src/error.js";
+import { EVENTDEFAULT_BASICKEY } from "../src/event.js";
 
 function makePtvWoice(): Woice {
   const w = new Woice();
   w.voiceAllocate(1);
   const vc = w.getVoice(0)!;
-  vc.basicKey = 0x4500;
+  vc.basicKey = EVENTDEFAULT_BASICKEY;
   vc.volume = 34;
   vc.pan = 64;
   vc.tuning = 1.0;
@@ -78,7 +79,7 @@ it("matePCM round trips", () => {
   const dv = new DataView(p.pBuf!.buffer);
   for (let i = 0; i < 8; i++) dv.setInt16(i * 2, (i + 1) * 500, true);
   vc.pcm = p;
-  vc.basicKey = 0x4500;
+  vc.basicKey = EVENTDEFAULT_BASICKEY;
   vc.voiceFlags = PTV_VOICEFLAG_WAVELOOP;
   const io = new MemoryIo();
   expect(w.ioMatePcmW(io)).toBe(true);

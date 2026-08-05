@@ -3,14 +3,14 @@ import { Service } from "../src/service.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
 import { Woice, VoiceType, PTV_DATAFLAG_WAVE, PTV_DATAFLAG_ENVELOPE, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
-import { EventKind } from "../src/event.js";
+import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_KEY } from "../src/event.js";
 import { pxtnServiceMooCalcSampleNum } from "../src/service.js";
 
 function makePtvWoice(): Woice {
   const w = new Woice();
   w.voiceAllocate(1);
   const vc = w.getVoice(0)!;
-  vc.basicKey = 0x4500;
+  vc.basicKey = EVENTDEFAULT_BASICKEY;
   vc.volume = 128;
   vc.pan = 64;
   vc.tuning = 1.0;
@@ -66,7 +66,7 @@ it("mooGetTotalSample matches C++ formula", () => {
 it("renders audible samples from an ON event", () => {
   const s = buildService(480);
   expect(s.evels.recordAddI(0, 0, EventKind.ON, 480)).toBe(true); // 1 beat
-  expect(s.evels.recordAddI(0, 0, EventKind.KEY, 0x6000)).toBe(true);
+  expect(s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY)).toBe(true);
   const io = new MemoryIo();
   expect(s.write(io, false, 0)).toBe(PxtnErr.OK); // project: rough=1, beatClock preserved
   const s2 = new Service();
@@ -93,7 +93,7 @@ it("renders audible samples from an ON event", () => {
 it("stops rendering at song end without loop", () => {
   const s = buildService(480);
   expect(s.evels.recordAddI(0, 0, EventKind.ON, 4800)).toBe(true);
-  expect(s.evels.recordAddI(0, 0, EventKind.KEY, 0x6000)).toBe(true);
+  expect(s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY)).toBe(true);
   const io = new MemoryIo();
   expect(s.write(io, false, 0)).toBe(PxtnErr.OK);
   const s2 = new Service();
@@ -123,7 +123,7 @@ it("stops rendering at song end without loop", () => {
 it("loops back to repeat point", () => {
   const s = buildService(480);
   expect(s.evels.recordAddI(0, 0, EventKind.ON, 4800)).toBe(true);
-  expect(s.evels.recordAddI(0, 0, EventKind.KEY, 0x6000)).toBe(true);
+  expect(s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY)).toBe(true);
   const io = new MemoryIo();
   expect(s.write(io, false, 0)).toBe(PxtnErr.OK);
   const s2 = new Service();

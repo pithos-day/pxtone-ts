@@ -4,13 +4,14 @@ import { Woice, VoiceType, PTV_VOICEFLAG_WAVELOOP, PTV_VOICEFLAG_SMOOTH } from "
 import { Pcm } from "../src/pcm.js";
 import { PxtnErr } from "../src/error.js";
 import { MemoryIo, ioPutInt32LE, ioPutU16LE } from "../src/data.js";
+import { EVENTDEFAULT_BASICKEY, EVENTDEFAULT_KEY } from "../src/event.js";
 
 function makePcmWoice(loop: boolean): Woice {
   const w = new Woice();
   w.voiceAllocate(1);
   const vc = w.getVoice(0)!;
   vc.type = VoiceType.Sampling;
-  vc.basicKey = 0x4500;
+  vc.basicKey = EVENTDEFAULT_BASICKEY;
   vc.volume = 128;
   vc.pan = 64;
   vc.tuning = 1.0;
@@ -101,7 +102,7 @@ it("toneEnvelope ramps down after release", () => {
   const w = new Woice();
   w.voiceAllocate(1);
   const vc = w.getVoice(0)!;
-  vc.basicKey = 0x4500;
+  vc.basicKey = EVENTDEFAULT_BASICKEY;
   vc.volume = 128;
   vc.pan = 64;
   vc.type = VoiceType.Coodinate;
@@ -143,14 +144,14 @@ it("toneEnvelope ramps down after release", () => {
 
 it("toneKey portamento glides", () => {
   const u = new Unit();
-  u.toneKey(0x6000 + 120);
+  u.toneKey(EVENTDEFAULT_KEY + 120);
   u.tonePortament(100);
   for (let i = 0; i < 50; i++) u.toneIncrementKey();
   const mid = u.toneIncrementKey();
-  expect(mid).toBeGreaterThan(0x6000);
-  expect(mid).toBeLessThan(0x6000 + 120);
+  expect(mid).toBeGreaterThan(EVENTDEFAULT_KEY);
+  expect(mid).toBeLessThan(EVENTDEFAULT_KEY + 120);
   for (let i = 0; i < 100; i++) u.toneIncrementKey();
-  expect(u.toneIncrementKey()).toBe(0x6000 + 120);
+  expect(u.toneIncrementKey()).toBe(EVENTDEFAULT_KEY + 120);
 });
 
 it("readV3x parses group and rejects unknown types", () => {

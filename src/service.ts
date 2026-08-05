@@ -6,7 +6,7 @@ import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioG
 import { PxtnText } from "./text.js";
 import { Master } from "./master.js";
 import { Evelist, type EveRecord } from "./evelist.js";
-import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_BEATCLOCK, EVENTDEFAULT_VOICENO } from "./event.js";
+import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_BEATCLOCK, EVENTDEFAULT_KEY, EVENTDEFAULT_VOICENO } from "./event.js";
 import { Delay } from "./delay.js";
 import { OverDrive } from "./overdrive.js";
 import { Woice, WoiceType, PTV_VOICEFLAG_BEATFIT } from "./woice.js";
@@ -937,7 +937,7 @@ export class Service {
       if (u >= this._woiceNum) return false;
       const changeValue = this._woices[u]!.x3xBasicKey - EVENTDEFAULT_BASICKEY;
       if (!this.evels.countByUnitKind(u, EventKind.KEY)) {
-        this.evels.recordAddI(0, u, EventKind.KEY, 0x6000);
+        this.evels.recordAddI(0, u, EventKind.KEY, EVENTDEFAULT_KEY);
       }
       this.evels.recordValueChange(0, -1, u, EventKind.KEY, changeValue);
     }

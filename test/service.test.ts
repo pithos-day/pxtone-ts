@@ -3,13 +3,13 @@ import { Service } from "../src/service.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
 import { Woice, WoiceType, VoiceType, PTV_DATAFLAG_WAVE, PTV_DATAFLAG_ENVELOPE } from "../src/woice.js";
-import { EventKind } from "../src/event.js";
+import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_KEY } from "../src/event.js";
 
 function makePtvWoice(): Woice {
   const w = new Woice();
   w.voiceAllocate(1);
   const vc = w.getVoice(0)!;
-  vc.basicKey = 0x4500;
+  vc.basicKey = EVENTDEFAULT_BASICKEY;
   vc.volume = 34;
   vc.pan = 64;
   vc.tuning = 1.0;
@@ -47,7 +47,7 @@ it("v5 project round trips through write/read", () => {
   s.text.setNameBuf(new TextEncoder().encode("test song"));
   s.text.setCommentBuf(new TextEncoder().encode("comment here"));
   s.evels.recordAddI(0, 0, EventKind.ON, 4800);
-  s.evels.recordAddI(0, 0, EventKind.KEY, 0x6000);
+  s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY);
   s.evels.recordAddI(240, 0, EventKind.VOLUME, 100);
   s.delayAdd(0, 0.5, 0.3, 0);
   s.overdriveAdd(90.0, 2.0, 0);
@@ -115,7 +115,7 @@ it("tune write/read keeps same event data", () => {
   expect(s.init()).toBe(PxtnErr.OK);
   s.evels.allocate(4096);
   s.evels.recordAddI(0, 0, EventKind.ON, 480);
-  s.evels.recordAddI(0, 0, EventKind.KEY, 0x6000);
+  s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY);
   const io = new MemoryIo();
   expect(s.write(io, true, 0)).toBe(PxtnErr.OK);
 

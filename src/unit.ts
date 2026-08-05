@@ -3,7 +3,7 @@
 import { PxtnErr } from "./error.js";
 import { MemoryIo, ioGetInt32LE, ioGetU16LE, ioGetBytes } from "./data.js";
 import type { Woice, VoiceInstance } from "./woice.js";
-import { PXTN_BUFSIZE_TIMEPAN, PXTN_MAX_CHANNEL, PXTN_MAX_UNIT_CONTROL_VOICE } from "./constants.js";
+import { PXTN_BUFSIZE_TIMEPAN, PXTN_MAX_CHANNEL, PXTN_MAX_TUNEWOICENAME, PXTN_MAX_UNIT_CONTROL_VOICE } from "./constants.js";
 import {
   EVENTDEFAULT_GROUPNO,
   EVENTDEFAULT_KEY,
@@ -101,7 +101,7 @@ export class Unit {
 
   setNameBuf(name: string | Uint8Array): boolean {
     const size = typeof name === "string" ? name.length : name.length;
-    if (size > 16) return false;
+    if (size > PXTN_MAX_TUNEWOICENAME) return false;
     if (typeof name === "string") this._name = name;
     else {
       let s = "";

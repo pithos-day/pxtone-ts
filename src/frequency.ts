@@ -1,5 +1,7 @@
 // pxtnPulse_Frequency.cpp 相当（音高テーブル）
 
+import { EVENTDEFAULT_KEY } from "./event.js";
+
 const _OCTAVE_NUM = 16;
 const _KEY_PER_OCTAVE = 12;
 const _FREQUENCY_PER_KEY = 0x10;
@@ -65,7 +67,7 @@ export class Frequency {
   }
 
   get(key: number): number {
-    let i = Math.trunc(((key + 0x6000) * _FREQUENCY_PER_KEY) / 0x100);
+    let i = Math.trunc(((key + EVENTDEFAULT_KEY) * _FREQUENCY_PER_KEY) / 0x100);
     if (i < 0) i = 0;
     else if (i >= _TABLE_SIZE) i = _TABLE_SIZE - 1;
     return this._freqTable[i]!;
