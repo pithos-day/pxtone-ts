@@ -215,9 +215,6 @@ export class Evelist {
     if (this._eves.length === 0) return false;
 
     let pNew = -1;
-    let pPrev = -1;
-    let pNext = -1;
-
     for (let r = 0; r < this._eves.length; r++) {
       if (this._eves[r]!.kind === EventKind.NULL) {
         pNew = r;
@@ -226,12 +223,45 @@ export class Evelist {
     }
     if (pNew < 0) return false;
 
+    const [pPrev, pNext] = this.findInsertPosition(clock, unitNo, kind, -1);
+
+    this.recSet(pNew, pPrev, pNext, clock, unitNo, kind, value);
+
+    // cut prev tail
+    if (eventKindIsTail(kind)) {
+      for (let p = this._eves[pNew]!.prev; p >= 0; p = this._eves[p]!.prev) {
+        const e = this._eves[p]!;
+        if (e.unitNo === unitNo && e.kind === kind) {
+          if (clock < e.clock + e.value) e.value = clock - e.clock;
+          break;
+        }
+      }
+    }
+
+    // delete next（自分より後ろで重なる tail イベントを消す）
+    if (eventKindIsTail(kind)) {
+      const limit = clock + value;
+      for (let p = this._eves[pNew]!.next; p >= 0 && this._eves[p]!.clock < limit; p = this._eves[p]!.next) {
+        const e = this._eves[p]!;
+        if (e.unitNo === unitNo && e.kind === kind) this.recCut(p);
+      }
+    }
+
+    return true;
+  }
+
+  // 挿入位置の直前/直後のレコード index (pPrev, pNext) を返す。
+  // searchStart を指定するとそこから探索を始める (x4x 読み込みの最適化)
+  private findInsertPosition(clock: number, unitNo: number, kind: number, searchStart: number): [number, number] {
+    let pPrev = -1;
+    let pNext = -1;
+
     if (this._start < 0) {
       // first
     } else if (clock < this._eves[this._start]!.clock) {
       pNext = this._start;
     } else {
-      let p = this._start;
+      let p = searchStart >= 0 ? searchStart : this._start;
       for (;; p = this._eves[p]!.next) {
         const e = this._eves[p]!;
         if (p < 0) break; // 末端（安全策）
@@ -273,29 +303,7 @@ export class Evelist {
       }
     }
 
-    this.recSet(pNew, pPrev, pNext, clock, unitNo, kind, value);
-
-    // cut prev tail
-    if (eventKindIsTail(kind)) {
-      for (let p = this._eves[pNew]!.prev; p >= 0; p = this._eves[p]!.prev) {
-        const e = this._eves[p]!;
-        if (e.unitNo === unitNo && e.kind === kind) {
-          if (clock < e.clock + e.value) e.value = clock - e.clock;
-          break;
-        }
-      }
-    }
-
-    // delete next（自分より後ろで重なる tail イベントを消す）
-    if (eventKindIsTail(kind)) {
-      const limit = clock + value;
-      for (let p = this._eves[pNew]!.next; p >= 0 && this._eves[p]!.clock < limit; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (e.unitNo === unitNo && e.kind === kind) this.recCut(p);
-      }
-    }
-
-    return true;
+    return [pPrev, pNext];
   }
 
   recordDelete(clock1: number, clock2: number, unitNo: number, kind: number): number {
@@ -615,55 +623,7 @@ export class Evelist {
 
   x4xReadAdd(clock: number, unitNo: number, kind: number, value: number): void {
     const pNew = this._linear++;
-    let pPrev = -1;
-    let pNext = -1;
-
-    if (this._start < 0) {
-      // first
-    } else if (clock < this._eves[this._start]!.clock) {
-      pNext = this._start;
-    } else {
-      let p = this._pX4xRec >= 0 ? this._pX4xRec : this._start;
-      for (;; p = this._eves[p]!.next) {
-        if (p < 0) break;
-        const e = this._eves[p]!;
-        if (e.clock === clock) {
-          for (;; p = this._eves[p]!.next) {
-            if (p < 0) break;
-            const e2 = this._eves[p]!;
-            if (e2.clock !== clock) {
-              pPrev = e2.prev;
-              pNext = p;
-              break;
-            }
-            if (unitNo === e2.unitNo && kind === e2.kind) {
-              // 同じ unitNo/kind の既存イベントは NULL 化して置換する
-              pPrev = e2.prev;
-              pNext = e2.next;
-              e2.kind = EventKind.NULL;
-              break;
-            }
-            if (comparePriority(kind, e2.kind) < 0) {
-              pPrev = e2.prev;
-              pNext = p;
-              break;
-            }
-            if (e2.next < 0) {
-              pPrev = p;
-              break;
-            }
-          }
-          break;
-        } else if (e.clock > clock) {
-          pPrev = e.prev;
-          pNext = p;
-          break;
-        } else if (e.next < 0) {
-          pPrev = p;
-          break;
-        }
-      }
-    }
+    const [pPrev, pNext] = this.findInsertPosition(clock, unitNo, kind, this._pX4xRec);
     this.recSet(pNew, pPrev, pNext, clock, unitNo, kind, value);
     this._pX4xRec = pNew;
   }
