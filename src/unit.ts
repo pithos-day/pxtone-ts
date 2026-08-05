@@ -100,7 +100,7 @@ export class Unit {
   }
 
   setNameBuf(name: string | Uint8Array): boolean {
-    const size = typeof name === "string" ? name.length : name.length;
+    const size = name.length;
     if (size > PXTN_MAX_TUNEWOICENAME) return false;
     if (typeof name === "string") this._name = name;
     else {
