@@ -635,6 +635,8 @@ export class Service {
       }
     }
 
+    // X3x 以前のフォーマットは unit ごとに voice_no / group_no / key tuning / key event の
+    // 4 イベントが暗黙に読まれるため、その分を上限に見積もりへ加える (元C++コメントより)
     if (fmtVer.fmt <= FmtVer.X3x) count += PXTN_MAX_TUNE_UNIT_STRUCT * 4;
 
     pCount.value = count;
@@ -1134,6 +1136,7 @@ export class Service {
 
   mooSetFade(fade: number, sec: number): boolean {
     if (!this._bInit) return false;
+    // フェード長は 8bit 固定小数 (1/256 サンプル単位) で保持する
     this._mooFadeMax = Math.trunc(this._dstSps * sec) >> 8;
     if (fade < 0) {
       this._mooFadeFade = -1;
@@ -1344,7 +1347,7 @@ export class Service {
       let work = 0;
       for (let g = 0; g < this._groupNum; g++) work += this._mooGroupSmps![g]!;
 
-      // fade..
+      // フェード: count>>8 は 8bit 固定小数の経過位置なので、max で割って 0..1 のゲインにする
       if (this._mooFadeFade) work = Math.trunc((work * (this._mooFadeCount >> 8)) / this._mooFadeMax);
 
       // master volume
@@ -1358,6 +1361,7 @@ export class Service {
 
     // increments..
     this._mooSmpCount++;
+    // PXTN_BUFSIZE_TIMEPAN は 2 のべき乗のため、ビットマスクで循環させる
     this._mooTimePanIndex = (this._mooTimePanIndex + 1) & (PXTN_BUFSIZE_TIMEPAN - 1);
 
     for (let u = 0; u < this._unitNum; u++) {

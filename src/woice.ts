@@ -231,6 +231,7 @@ export class Woice {
         vc.type = VoiceType.Sampling;
         res = vc.pcm.read(io);
         if (res !== PxtnErr.OK) return res;
+        // 0.005 秒未満の短い PCM は一瞬で鳴り終わってしまうためループ再生にする
         if (vc.pcm.sec < 0.005) vc.voiceFlags |= PTV_VOICEFLAG_WAVELOOP;
         else vc.voiceFlags &= ~PTV_VOICEFLAG_WAVELOOP;
         this._type = WoiceType.PCM;
@@ -441,6 +442,7 @@ export class Woice {
         total += t;
       }
     }
+    // 先頭のサイズフィールドに総バイト数を書き戻す
     if (!io.seek(SEEK_CUR, -(total + 4))) return -1;
     writeI32LE(io, total);
     if (!io.seek(SEEK_CUR, total)) return -1;
@@ -460,6 +462,7 @@ export class Woice {
         for (let i = 0; i < vc.wave.num; i++) {
           ioPutU8w(io, vc.wave.points[i]!.x & 0xff);
           add += 1;
+          // y は符号付き (-128..127) のため、int8 に符号拡張してから 8bit として書き出す
           ioPutU8w(io, (vc.wave.points[i]!.y << 24) >> 24 & 0xff);
           add += 1;
         }
@@ -529,6 +532,7 @@ export class Woice {
     const _total = ioGetInt32LE(io);
     if (_total === null) return PxtnErr.DESC_R;
     if (version > PTV_VERSION) return PxtnErr.FMT_NEW;
+    // 残りデータの総サイズ。整合性確認のみに使えるが、ここでは読み捨てる
 
     const bk = dataReadV(io);
     if (bk === null) return PxtnErr.DESC_R;
@@ -708,6 +712,7 @@ export class Woice {
     vc.basicKey = basicKey;
     vc.tuning = tuning;
     this._x3xBasicKey = basicKey;
+    // x3x 形式の整合用フィールド: PCM ボイスにはチューニング情報がないため 0 を保持する
     this._x3xTuning = 0;
     return PxtnErr.OK;
   }

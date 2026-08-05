@@ -161,6 +161,7 @@ export class Evelist {
     let n = 0;
     for (; p >= 0; p = this._eves[p]!.next) {
       const e = this._eves[p]!;
+      // [clock1, clock2) を数えるが、clock1 と同時刻のイベントは clock2 を過ぎていても範囲内に含める
       if (e.clock !== clock1 && e.clock >= clock2) break;
       if (e.unitNo === unitNo) n++;
     }
@@ -244,6 +245,7 @@ export class Evelist {
               break;
             }
             if (unitNo === e2.unitNo && kind === e2.kind) {
+              // 同じ unitNo/kind の既存イベントは NULL 化して置換する
               pPrev = e2.prev;
               pNext = e2.next;
               e2.kind = EventKind.NULL;
@@ -635,6 +637,7 @@ export class Evelist {
               break;
             }
             if (unitNo === e2.unitNo && kind === e2.kind) {
+              // 同じ unitNo/kind の既存イベントは NULL 化して置換する
               pPrev = e2.prev;
               pNext = e2.next;
               e2.kind = EventKind.NULL;
