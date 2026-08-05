@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { MemoryIo } from "../src/data.js";
+import { MemoryIo, ioPutAsciiString, ioPutU16LE, ioPutUint32LE } from "../src/data.js";
 import { Pcm } from "../src/pcm.js";
 import { PxtnErr } from "../src/error.js";
 
@@ -33,14 +33,42 @@ it("rejects non-RIFF input", () => {
 });
 
 it("skips unknown chunks before data", () => {
-  // RIFF + WAVE + fmt の後に LIST チャンク、その後に data
+  // fmt の後に未知チャンク (LIST + INFO/ISFT) を挟み、その後に data を置く
   const p = makePcm();
+  const samples = p.pBuf!;
+  const sampleSize = samples.length;
+  const text = "test!";
+  const isftSize = text.length;
+  const listSize = 4 + 4 + 4 + isftSize;
+  const riffSize = sampleSize + 4 + 26 + 12 + 8 + 8 + listSize;
+
   const io = new MemoryIo();
-  p.write(io);
-  // LISTを挿入するため再構築: 書き込みは既にfact/dataを含む → 読ませるだけなら十分
+  ioPutAsciiString(io, "RIFF");
+  ioPutUint32LE(io, riffSize);
+  ioPutAsciiString(io, "WAVE");
+  ioPutAsciiString(io, "fmt ");
+  ioPutUint32LE(io, 0x12);
+  ioPutU16LE(io, 0x0001);
+  ioPutU16LE(io, p.ch);
+  ioPutUint32LE(io, p.sps);
+  ioPutUint32LE(io, (p.sps * p.bps * p.ch) / 8);
+  ioPutU16LE(io, (p.bps * p.ch) / 8);
+  ioPutU16LE(io, p.bps);
+  ioPutU16LE(io, 0);
+  ioPutAsciiString(io, "LIST");
+  ioPutUint32LE(io, listSize);
+  ioPutAsciiString(io, "INFO");
+  ioPutAsciiString(io, "ISFT");
+  ioPutUint32LE(io, isftSize);
+  ioPutAsciiString(io, text);
+  ioPutAsciiString(io, "data");
+  ioPutUint32LE(io, sampleSize);
+  io.write(samples, 1, sampleSize);
+
   io.seek(0, 0);
   const q = new Pcm();
   expect(q.read(io)).toBe(PxtnErr.OK);
+  expect(q.ch).toBe(1);
   expect(q.pBuf).toEqual(p.pBuf);
 });
 
