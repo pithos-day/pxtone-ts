@@ -19,6 +19,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:realtime": "vitest run test/realtime.test.ts",
     "build": "tsup",
     "build:web": "tsup --config tsup.config.web.ts",
     "dev:web": "python3 -m http.server 8080 -d web",
