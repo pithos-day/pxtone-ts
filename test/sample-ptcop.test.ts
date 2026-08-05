@@ -1,10 +1,12 @@
 import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { Service } from "../src/service.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
 
-const SAMPLE_PATH = "/home/admin/Documents/References/Pxtone/pxtone-source-code 220910a/sample data/sample.ptcop";
+const SAMPLE_PATH = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "sample.ptcop");
 
 it("reads the real sample.ptcop", () => {
   const buf = readFileSync(SAMPLE_PATH);
