@@ -1,6 +1,6 @@
 # pxtone-ts
 
-[Piston Collage](https://www32.atwiki.jp/pxtone/) のオーディオエンジンを TypeScript に移植した Web 版実装です。
+[ピストンコラージュ](https://pxtone.org/) のオーディオエンジンを TypeScript に移植した Web 版実装です。
 C++ 版ソース ([pxtone-source-code 220910a](https://pxtone.org/developer/) を基準に、ptcop ファイルの読み書きと再生（レンダリング）を JavaScript で再現します。
 
 ## 特徴
@@ -51,3 +51,7 @@ pnpm build       # tsup (dist/)
 - **OGGV ボイス非対応**: C++ 側でもオプション機能（`pxINCLUDE_OGGVORBIS`）であり、デフォルトビルドでは無効。未対応ファイルは `OGG_NO_SUPPORTED` を返す
 - **x1x 形式非対応**: 古いフォーマットは読み込み不可（C++ と同じ挙動）
 - **再生方式**: 事前全曲レンダリング方式（長尺曲は読み込みに時間がかかる）
+
+## 謝辞
+
+ピストンコラージュ及び移植元のライブラリの開発者である[開発室Pixel](https://studiopixel.jp)氏に感謝。
