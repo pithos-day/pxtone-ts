@@ -16,6 +16,7 @@ let totalSec = 0;
 let playOffsetSec = 0;
 let startCtxTime = 0;
 let rafId = 0;
+let waveCanvas: HTMLCanvasElement | null = null;
 
 // ---- DOM ----
 const fileInput = document.getElementById("file") as HTMLInputElement;
@@ -32,12 +33,17 @@ function log(msg: string): void {
   status.textContent = msg;
 }
 
-function drawWave(buffer: AudioBuffer): void {
+// 波形をオフスクリーンキャンバスに一度だけ描画する
+function drawWaveToOffscreen(buffer: AudioBuffer): void {
   const w = canvas.width;
   const h = canvas.height;
+  if (!waveCanvas) waveCanvas = document.createElement("canvas");
+  waveCanvas.width = w;
+  waveCanvas.height = h;
+  const ctx = waveCanvas.getContext("2d")!;
   const data = buffer.getChannelData(0);
   const len = data.length;
-  const peak = new Int16Array(w);
+  const peak = new Float32Array(w);
   for (let i = 0; i < w; i++) {
     const start = Math.trunc((i * len) / w);
     const end = Math.trunc(((i + 1) * len) / w);
@@ -48,13 +54,21 @@ function drawWave(buffer: AudioBuffer): void {
     }
     peak[i] = max;
   }
-  canvasCtx.fillStyle = "#111";
-  canvasCtx.fillRect(0, 0, w, h);
-  canvasCtx.fillStyle = "#4af";
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#4af";
   for (let i = 0; i < w; i++) {
     const ph = Math.max(1, Math.trunc(peak[i]! * (h / 2)));
-    canvasCtx.fillRect(i, h / 2 - ph, 1, ph * 2);
+    ctx.fillRect(i, h / 2 - ph, 1, ph * 2);
   }
+}
+
+// 波形 (オフスクリーン) を貼り付けてカーソルを描画
+function redrawWave(): void {
+  canvasCtx.fillStyle = "#111";
+  canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+  if (waveCanvas) canvasCtx.drawImage(waveCanvas, 0, 0);
+  drawCursor();
 }
 
 function drawCursor(): void {
@@ -126,26 +140,32 @@ async function loadAndRender(bytes: Uint8Array, name: string): Promise<void> {
   }
   buffer = ab;
   playOffsetSec = 0;
-  drawWave(ab);
+  drawWaveToOffscreen(ab);
+  redrawWave();
   updateTime();
 }
 
 function startPlayback(): void {
   if (!buffer || !audioCtx) return;
   stopPlayback();
-  source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(audioCtx.destination);
-  startCtxTime = audioCtx.currentTime;
-  source.start(0, playOffsetSec);
-  source.onended = () => {
-    if (playOffsetSec >= totalSec - 0.05) {
-      playOffsetSec = 0;
-      updateTime();
-      drawCursor();
-      btnPlay.textContent = "▶ 再生";
-    }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(audioCtx.destination);
+  src.onended = () => {
+    // シーク・停止で破棄済みの source からの発火は無視
+    if (source !== src) return;
+    // 自然終了 (曲末): 停止状態のまま末尾に留める
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    source = null;
+    playOffsetSec = totalSec;
+    btnPlay.textContent = "▶ 再生";
+    updateTime();
+    redrawWave();
   };
+  source = src;
+  startCtxTime = audioCtx.currentTime;
+  src.start(0, playOffsetSec);
   btnPlay.textContent = "⏸ 一時停止";
   tick();
 }
@@ -154,13 +174,14 @@ function stopPlayback(): void {
   if (rafId) cancelAnimationFrame(rafId);
   rafId = 0;
   if (source) {
+    const old = source;
+    source = null; // 先に null にして onended を無効化 (位置保持)
     try {
-      source.stop();
+      old.stop();
     } catch {
       /* ignore */
     }
-    source.disconnect();
-    source = null;
+    old.disconnect();
   }
   btnPlay.textContent = "▶ 再生";
 }
@@ -170,10 +191,7 @@ function tick(): void {
   playOffsetSec = audioCtx.currentTime - startCtxTime;
   if (playOffsetSec >= totalSec) playOffsetSec = totalSec;
   updateTime();
-  canvasCtx.fillStyle = "#111";
-  canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-  drawWave(buffer!);
-  drawCursor();
+  redrawWave();
   rafId = requestAnimationFrame(tick);
 }
 
@@ -181,6 +199,8 @@ btnPlay.addEventListener("click", () => {
   if (source) {
     stopPlayback();
   } else {
+    // 曲末で停止中なら先頭から再生
+    if (playOffsetSec >= totalSec - 0.05) playOffsetSec = 0;
     startPlayback();
   }
 });
@@ -189,20 +209,18 @@ btnStop.addEventListener("click", () => {
   stopPlayback();
   playOffsetSec = 0;
   updateTime();
+  redrawWave();
 });
 
 canvas.addEventListener("click", (e) => {
   if (!buffer) return;
   const rect = canvas.getBoundingClientRect();
   const ratio = (e.clientX - rect.left) / rect.width;
-  playOffsetSec = Math.max(0, Math.min(totalSec - 0.01, ratio * totalSec));
+  playOffsetSec = Math.max(0, Math.min(totalSec, ratio * totalSec));
   if (source) startPlayback();
   else {
     updateTime();
-    canvasCtx.fillStyle = "#111";
-    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-    drawWave(buffer);
-    drawCursor();
+    redrawWave();
   }
 });
 
