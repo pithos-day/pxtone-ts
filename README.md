@@ -1,7 +1,7 @@
 # pxtone-ts
 
 [Piston Collage](https://www32.atwiki.jp/pxtone/) のオーディオエンジンを TypeScript に移植した Web 版実装です。
-C++ 版ソース (`pxtone/pxtone-source-code 220910a`) を基準に、ptcop ファイルの読み書きと再生（レンダリング）を JavaScript で再現します。
+C++ 版ソース ([pxtone-source-code 220910a](https://pxtone.org/developer/) を基準に、ptcop ファイルの読み書きと再生（レンダリング）を JavaScript で再現します。
 
 ## 特徴
 
