@@ -4,3 +4,4 @@ reference/build/
 reference/*.o
 reference/*.out
 *.wav
+web/player.js
