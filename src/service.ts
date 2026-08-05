@@ -2,18 +2,20 @@
 // 注: Moo レンダラーは engine.ts で別途移植する（ここでは管理・IOのみ）
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioGetUint16LE, ioPutInt32LE, ioPutU16LE, ioPutU8, ioGetFloatLE, ioGetUint32LE } from "./data.js";
+import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioGetUint16LE, ioPutInt32LE, ioPutU16LE, ioPutU8, ioGetFloatLE, ioGetUint32LE, int32ToFloat } from "./data.js";
 import { PxtnText } from "./text.js";
 import { Master } from "./master.js";
-import { Evelist } from "./evelist.js";
-import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_BEATCLOCK } from "./event.js";
+import { Evelist, type EveRecord } from "./evelist.js";
+import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_BEATCLOCK, EVENTDEFAULT_VOICENO } from "./event.js";
 import { Delay } from "./delay.js";
 import { OverDrive } from "./overdrive.js";
-import { Woice, WoiceType } from "./woice.js";
+import { Woice, WoiceType, PTV_VOICEFLAG_BEATFIT } from "./woice.js";
 import { Unit } from "./unit.js";
 import { NoiseBuilder } from "./noise-builder.js";
+import { Frequency } from "./frequency.js";
 import {
   PXTN_BITPERSAMPLE,
+  PXTN_BUFSIZE_TIMEPAN,
   PXTN_MAX_TUNE_DELAY_STRUCT,
   PXTN_MAX_TUNE_GROUP_NUM,
   PXTN_MAX_TUNE_OVERDRIVE_STRUCT,
@@ -23,6 +25,8 @@ import {
   PXTN_MAX_TUNEWOICENAME,
   PXTN_CODESIZE,
   PXTN_VERSIONSIZE,
+  PXTN_VOMIT_PREP_FLAG_LOOP,
+  PXTN_VOMIT_PREP_FLAG_UNIT_MUTE,
 } from "./constants.js";
 
 // フォーマットバージョンコード
@@ -190,6 +194,31 @@ export class Service {
 
   private _groupNum = PXTN_MAX_TUNE_GROUP_NUM;
 
+  // ---- Moo (レンダラー) 状態 ----
+  private _mooBValidData = false;
+  private _mooBEndVomit = true;
+  private _mooBMuteByUnit = false;
+  private _mooBLoop = true;
+  private _mooFadeFade = 0;
+  private _mooMasterVol = 1.0;
+  private _mooBtClock = 0;
+  private _mooBtNum = 0;
+  private _mooFreq: Frequency | null = null;
+  private _mooGroupSmps: Int32Array | null = null;
+  private _mooPEve = -1; // evels.records の index
+  private _mooSmpCount = 0;
+  private _mooSmpStart = 0;
+  private _mooSmpEnd = 0;
+  private _mooSmpRepeat = 0;
+  private _mooSmpSmooth = 0;
+  private _mooClockRate = 0;
+  private _mooFadeCount = 0;
+  private _mooFadeMax = 0;
+  private _mooTop = 0x7fff;
+  private _mooSmpStride = 1;
+  private _mooTimePanIndex = 0;
+  private _mooBtTempo = 0;
+
   get isInit(): boolean {
     return this._bInit;
   }
@@ -232,13 +261,23 @@ export class Service {
 
     this._groupNum = PXTN_MAX_TUNE_GROUP_NUM;
 
+    if (!this._mooInit()) return PxtnErr.MOO_INIT;
+
     this._bEdit = bEdit;
     this._bInit = true;
     return PxtnErr.OK;
   }
 
+  private _mooInit(): boolean {
+    this._mooFreq = new Frequency();
+    this._mooFreq.init();
+    this._mooGroupSmps = new Int32Array(this._groupNum);
+    return true;
+  }
+
   clear(): boolean {
     if (!this._bInit) return false;
+    if (!this._bEdit) this._mooBValidData = false;
     this.text.setNameBuf(new Uint8Array(0));
     this.text.setCommentBuf(new Uint8Array(0));
     this.evels.clear();
@@ -886,6 +925,7 @@ export class Service {
     if (clock1 > clock2) this.master.adjustMeasNum(clock1);
     else this.master.adjustMeasNum(clock2);
 
+    this._mooBValidData = true;
     return PxtnErr.OK;
   }
 
@@ -1054,6 +1094,363 @@ export class Service {
     ioPutU16LE(desc, 0);
     return true;
   }
+
+  // ---------- Moo (レンダラー) ----------
+
+  mooIsValidData(): boolean {
+    if (!this._bInit) return false;
+    return this._mooBValidData;
+  }
+
+  mooIsEndVomit(): boolean {
+    if (!this._bInit) return true;
+    return this._mooBEndVomit;
+  }
+
+  mooGetNowClock(): number {
+    if (!this._bInit) return 0;
+    if (this._mooClockRate) return Math.trunc(this._mooSmpCount / this._mooClockRate);
+    return 0;
+  }
+
+  mooGetEndClock(): number {
+    if (!this._bInit) return 0;
+    if (this._mooClockRate) return Math.trunc(this._mooSmpEnd / this._mooClockRate);
+    return 0;
+  }
+
+  mooSetMuteByUnit(b: boolean): boolean {
+    if (!this._bInit) return false;
+    this._mooBMuteByUnit = b;
+    return true;
+  }
+
+  mooSetLoop(b: boolean): boolean {
+    if (!this._bInit) return false;
+    this._mooBLoop = b;
+    return true;
+  }
+
+  mooSetFade(fade: number, sec: number): boolean {
+    if (!this._bInit) return false;
+    this._mooFadeMax = Math.trunc(this._dstSps * sec) >> 8;
+    if (fade < 0) {
+      this._mooFadeFade = -1;
+      this._mooFadeCount = this._mooFadeMax << 8;
+    } else if (fade > 0) {
+      this._mooFadeFade = 1;
+      this._mooFadeCount = 0;
+    } else {
+      this._mooFadeFade = 0;
+      this._mooFadeCount = 0;
+    }
+    return true;
+  }
+
+  mooSetMasterVolume(v: number): boolean {
+    if (!this._bInit) return false;
+    if (v < 0) v = 0;
+    if (v > 1) v = 1;
+    this._mooMasterVol = v;
+    return true;
+  }
+
+  mooGetSamplingOffset(): number {
+    if (!this._bInit) return 0;
+    if (this._mooBEndVomit) return 0;
+    return this._mooSmpCount;
+  }
+
+  mooGetSamplingEnd(): number {
+    if (!this._bInit) return 0;
+    if (this._mooBEndVomit) return 0;
+    return this._mooSmpEnd;
+  }
+
+  mooGetTotalSample(): number {
+    if (!this._bInit) return 0;
+    if (!this._mooBValidData) return 0;
+    return pxtnServiceMooCalcSampleNum(this.master.measNum, this.master.beatNum, this._dstSps, this.master.beatTempo);
+  }
+
+  mooPreparation(prep: VomitPreparation | null): boolean {
+    if (!this._bInit || !this._mooBValidData || !this._dstChNum || !this._dstSps || !this._dstBytePerSmp) {
+      this._mooBEndVomit = true;
+      return false;
+    }
+
+    let startMeas = 0;
+    let startSample = 0;
+    let startFloat = 0;
+    let measEnd = this.master.playMeas;
+    let measRepeat = this.master.repeatMeas;
+    let fadeinSec = 0;
+
+    if (prep) {
+      startMeas = prep.startPosMeas;
+      startSample = prep.startPosSample;
+      startFloat = prep.startPosFloat;
+      if (prep.measEnd) measEnd = prep.measEnd;
+      if (prep.measRepeat) measRepeat = prep.measRepeat;
+      if (prep.fadeinSec) fadeinSec = prep.fadeinSec;
+      if (prep.flags & PXTN_VOMIT_PREP_FLAG_UNIT_MUTE) this._mooBMuteByUnit = true;
+      else this._mooBMuteByUnit = false;
+      if (prep.flags & PXTN_VOMIT_PREP_FLAG_LOOP) this._mooBLoop = true;
+      else this._mooBLoop = false;
+      this._mooMasterVol = prep.masterVolume;
+    }
+
+    this._mooBtClock = this.master.beatClock;
+    this._mooBtNum = this.master.beatNum;
+    this._mooBtTempo = this.master.beatTempo;
+    this._mooClockRate = (60.0 * this._dstSps) / (this._mooBtTempo * this._mooBtClock);
+    this._mooSmpStride = 44100.0 / this._dstSps;
+    this._mooTop = 0x7fff;
+    this._mooTimePanIndex = 0;
+
+    this._mooSmpEnd = Math.trunc(measEnd * this._mooBtNum * this._mooBtClock * this._mooClockRate);
+    this._mooSmpRepeat = Math.trunc(measRepeat * this._mooBtNum * this._mooBtClock * this._mooClockRate);
+
+    if (startFloat) this._mooSmpStart = Math.trunc(this.mooGetTotalSample() * startFloat);
+    else if (startSample) this._mooSmpStart = startSample;
+    else this._mooSmpStart = Math.trunc(startMeas * this._mooBtNum * this._mooBtClock * this._mooClockRate);
+
+    this._mooSmpCount = this._mooSmpStart;
+    this._mooSmpSmooth = Math.trunc(this._dstSps / 250); // (0.004sec)
+
+    if (fadeinSec > 0) this.mooSetFade(1, fadeinSec);
+    else this.mooSetFade(0, 0);
+
+    this.tonesClear();
+
+    this._mooPEve = 0;
+
+    this._mooInitUnitTone();
+
+    this._mooBEndVomit = false;
+    return true;
+  }
+
+  // 1サンプル分を合成して [L,R] を返す。終了時は null
+  private _mooPxtoneSample(): [number, number] | null {
+    // envelope..
+    for (let u = 0; u < this._unitNum; u++) this._units[u]!.toneEnvelope();
+
+    const clock = Math.trunc(this._mooSmpCount / this._mooClockRate);
+    const records = this.evels.records;
+
+    // events..
+    for (; this._mooPEve >= 0 && this._mooPEve < records.length && records[this._mooPEve]!.clock <= clock; this._mooPEve++) {
+      const eve = records[this._mooPEve]!;
+      const u = eve.unitNo;
+      const pU = this._units[u]!;
+
+      switch (eve.kind) {
+        case EventKind.ON: {
+          const onCount = Math.trunc((eve.clock + eve.value - clock) * this._mooClockRate);
+          if (onCount <= 0) {
+            pU.toneZeroLives();
+            break;
+          }
+          pU.toneKeyOn();
+          const pWc = pU.woice;
+          if (!pWc) break;
+          for (let v = 0; v < pWc.voiceNum; v++) {
+            const pTone = pU.getTone(v);
+            const pVi = pWc.getInstance(v)!;
+
+            if (pVi.envRelease) {
+              const maxLifeCount1 = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + pVi.envRelease;
+              let maxLifeCount2: number;
+              const c = eve.clock + eve.value + pTone.envReleaseClock;
+              let next: EveRecord | null = null;
+              for (let q = this._mooPEve + 1; q < records.length; q++) {
+                const p = records[q]!;
+                if (p.clock > c) break;
+                if (p.unitNo === u && p.kind === EventKind.ON) {
+                  next = p;
+                  break;
+                }
+              }
+              if (!next) maxLifeCount2 = this._mooSmpEnd - Math.trunc(clock * this._mooClockRate);
+              else maxLifeCount2 = Math.trunc((next.clock - clock) * this._mooClockRate);
+              if (maxLifeCount1 < maxLifeCount2) pTone.lifeCount = maxLifeCount1;
+              else pTone.lifeCount = maxLifeCount2;
+            } else {
+              pTone.lifeCount = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate);
+            }
+
+            if (pTone.lifeCount > 0) {
+              pTone.onCount = onCount;
+              pTone.smpPos = 0;
+              pTone.envPos = 0;
+              if (pVi.envSize) pTone.envVolume = pTone.envStart = 0; // envelope
+              else pTone.envVolume = pTone.envStart = 128; // no-envelope
+            }
+          }
+          break;
+        }
+        case EventKind.KEY:
+          pU.toneKey(eve.value);
+          break;
+        case EventKind.PAN_VOLUME:
+          pU.tonePanVolume(this._dstChNum, eve.value);
+          break;
+        case EventKind.PAN_TIME:
+          pU.tonePanTime(this._dstChNum, eve.value, this._dstSps);
+          break;
+        case EventKind.VELOCITY:
+          pU.toneVelocity(eve.value);
+          break;
+        case EventKind.VOLUME:
+          pU.toneVolume(eve.value);
+          break;
+        case EventKind.PORTAMENT:
+          pU.tonePortament(Math.trunc(eve.value * this._mooClockRate));
+          break;
+        case EventKind.BEATCLOCK:
+        case EventKind.BEATTEMPO:
+        case EventKind.BEATNUM:
+        case EventKind.REPEAT:
+        case EventKind.LAST:
+          break;
+        case EventKind.VOICENO:
+          this._mooResetVoiceOn(pU, eve.value);
+          break;
+        case EventKind.GROUPNO:
+          pU.toneGroupNo(eve.value);
+          break;
+        case EventKind.TUNING:
+          pU.toneTuning(int32ToFloat(eve.value));
+          break;
+      }
+    }
+
+    // sampling..
+    for (let u = 0; u < this._unitNum; u++) {
+      this._units[u]!.toneSample(this._mooBMuteByUnit, this._dstChNum, this._mooTimePanIndex, this._mooSmpSmooth);
+    }
+
+    const out: [number, number] = [0, 0];
+    for (let ch = 0; ch < this._dstChNum; ch++) {
+      this._mooGroupSmps!.fill(0);
+      for (let u = 0; u < this._unitNum; u++) this._units[u]!.toneSupple(this._mooGroupSmps!, ch, this._mooTimePanIndex);
+      for (let o = 0; o < this._ovdrvNum; o++) this._ovdrvs[o]!.toneSupple(this._mooGroupSmps!);
+      for (let d = 0; d < this._delayNum; d++) this._delays[d]!.toneSupple(ch, this._mooGroupSmps!);
+
+      // collect.
+      let work = 0;
+      for (let g = 0; g < this._groupNum; g++) work += this._mooGroupSmps![g]!;
+
+      // fade..
+      if (this._mooFadeFade) work = Math.trunc((work * (this._mooFadeCount >> 8)) / this._mooFadeMax);
+
+      // master volume
+      work = Math.trunc(work * this._mooMasterVol);
+
+      // to buffer..
+      if (work > this._mooTop) work = this._mooTop;
+      if (work < -this._mooTop) work = -this._mooTop;
+      out[ch] = work;
+    }
+
+    // increments..
+    this._mooSmpCount++;
+    this._mooTimePanIndex = (this._mooTimePanIndex + 1) & (PXTN_BUFSIZE_TIMEPAN - 1);
+
+    for (let u = 0; u < this._unitNum; u++) {
+      const keyNow = this._units[u]!.toneIncrementKey();
+      this._units[u]!.toneIncrementSample(this._mooFreq!.get2(keyNow) * this._mooSmpStride);
+    }
+
+    // delay
+    for (let d = 0; d < this._delayNum; d++) this._delays[d]!.toneIncrement();
+
+    // fade out
+    if (this._mooFadeFade < 0) {
+      if (this._mooFadeCount > 0) this._mooFadeCount--;
+      else return null;
+    } else if (this._mooFadeFade > 0) {
+      // fade in
+      if (this._mooFadeCount < this._mooFadeMax << 8) this._mooFadeCount++;
+      else this._mooFadeFade = 0;
+    }
+
+    if (this._mooSmpCount >= this._mooSmpEnd) {
+      if (!this._mooBLoop) return null;
+      this._mooSmpCount = this._mooSmpRepeat;
+      this._mooPEve = 0;
+      this._mooInitUnitTone();
+    }
+    return out;
+  }
+
+  private _mooResetVoiceOn(pU: Unit, w: number): boolean {
+    if (!this._bInit) return false;
+    const pWc = this.woiceGet(w);
+    if (!pWc) return false;
+    pU.setWoice(pWc);
+    for (let v = 0; v < pWc.voiceNum; v++) {
+      const pInst = pWc.getInstance(v)!;
+      const pVc = pWc.getVoice(v)!;
+      let ofsFreq = 0;
+      if (pVc.voiceFlags & PTV_VOICEFLAG_BEATFIT) {
+        ofsFreq = (pInst.smpBodyW * this._mooBtTempo) / (44100 * 60 * pVc.tuning);
+      } else {
+        ofsFreq = this._mooFreq!.get(EVENTDEFAULT_BASICKEY - pVc.basicKey) * pVc.tuning;
+      }
+      pU.toneResetAnd2prm(v, Math.trunc(pInst.envRelease / this._mooClockRate), ofsFreq);
+    }
+    return true;
+  }
+
+  private _mooInitUnitTone(): boolean {
+    if (!this._bInit) return false;
+    for (let u = 0; u < this._unitNum; u++) {
+      const pU = this._units[u]!;
+      pU.toneInit();
+      this._mooResetVoiceOn(pU, EVENTDEFAULT_VOICENO);
+    }
+    return true;
+  }
+
+  // バッファへ出力。buf は Int16Array、長さ = smpNum * _dstChNum
+  Moo(buf: Int16Array, smpNum: number): boolean {
+    if (!this._bInit) return false;
+    if (!this._mooBValidData) return false;
+    if (this._mooBEndVomit) return false;
+
+    let smpW = 0;
+    for (smpW = 0; smpW < smpNum; smpW++) {
+      const sample = this._mooPxtoneSample();
+      if (sample === null) {
+        this._mooBEndVomit = true;
+        break;
+      }
+      for (let ch = 0; ch < this._dstChNum; ch++) buf[smpW * this._dstChNum + ch] = sample[ch]!;
+    }
+    for (; smpW < smpNum; smpW++) {
+      for (let ch = 0; ch < this._dstChNum; ch++) buf[smpW * this._dstChNum + ch] = 0;
+    }
+    return true;
+  }
+}
+
+export interface VomitPreparation {
+  startPosMeas: number;
+  startPosSample: number;
+  startPosFloat: number;
+  measEnd: number;
+  measRepeat: number;
+  fadeinSec: number;
+  flags: number;
+  masterVolume: number;
+}
+
+export function pxtnServiceMooCalcSampleNum(measNum: number, beatNum: number, sps: number, beatTempo: number): number {
+  if (!beatTempo) return 0;
+  const totalBeatNum = measNum * beatNum;
+  return Math.trunc((sps * 60 * totalBeatNum) / beatTempo);
 }
 
 function writeAscii(desc: MemoryIo, s: string): void {
