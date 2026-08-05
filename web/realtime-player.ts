@@ -2,11 +2,7 @@
 // メッセージの送受信とオフライン全曲レンダリング (波形ピーク・WAV書き出し用) をカプセル化する。
 
 import type { MainToWorklet, WorkletToMain } from "../src/worklet/messages.js";
-import { Service } from "../src/service.js";
-import { MemoryIo } from "../src/data.js";
-import { PxtnErr } from "../src/error.js";
-
-const OFFLINE_CHUNK = 44100;
+import { renderOffline, type OfflineRenderResult } from "./offline-render.js";
 
 export interface RealtimePlayerOptions {
   onPosition?: (sample: number) => void;
@@ -135,21 +131,7 @@ export class RealtimePlayer {
   }
 
   // オフライン全曲レンダリング (波形ピーク計算・WAV書き出し用の検証リファレンス)
-  static renderOffline(bytes: Uint8Array, sps = 44100): { data: Int16Array; totalSample: number } | null {
-    const s = new Service();
-    if (s.init() !== PxtnErr.OK) return null;
-    const io = new MemoryIo(bytes);
-    if (s.read(io) !== PxtnErr.OK) return null;
-    if (s.tonesReady() !== PxtnErr.OK) return null;
-    s.setDestinationQuality(2, sps);
-    // 検証リファレンスとして 1 周分をレンダリング (worklet と同一設定: ループなし)
-    if (!s.mooPreparation({ startPosMeas: 0, startPosSample: 0, startPosFloat: 0, measEnd: 0, measRepeat: 0, fadeinSec: 0, flags: 0, masterVolume: 1.0 })) return null;
-    const total = s.mooGetSamplingEnd();
-    const out = new Int16Array(total * 2);
-    for (let pos = 0; pos < total; pos += OFFLINE_CHUNK) {
-      const n = Math.min(OFFLINE_CHUNK, total - pos);
-      s.Moo(out.subarray(pos * 2), n);
-    }
-    return { data: out, totalSample: total };
+  static renderOffline(bytes: Uint8Array, sps = 44100): OfflineRenderResult | null {
+    return renderOffline(bytes, sps);
   }
 }

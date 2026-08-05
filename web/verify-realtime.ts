@@ -1,10 +1,8 @@
 // オフライン (Service.Moo 全曲) とオンライン (OfflineAudioContext + AudioWorklet) の
 // 出力一致検証ページ。結果を #result に JSON で出力する。
 
-import { Service } from "../src/service.js";
-import { MemoryIo } from "../src/data.js";
-import { PxtnErr } from "../src/error.js";
 import type { WorkletToMain } from "../src/worklet/messages.js";
+import { renderOffline } from "./offline-render.js";
 
 const SPS = 44100;
 const SONGS = [
@@ -36,24 +34,6 @@ function setResult(): void {
     // 検証ドライバ (chromium 起動テスト) へ結果を送信
     void fetch("/result", { method: "POST", body: json });
   }
-}
-
-function renderOffline(bytes: Uint8Array): { data: Int16Array; total: number } | null {
-  const s = new Service();
-  if (s.init() !== PxtnErr.OK) return null;
-  const io = new MemoryIo(bytes);
-  if (s.read(io) !== PxtnErr.OK) return null;
-  if (s.tonesReady() !== PxtnErr.OK) return null;
-  s.setDestinationQuality(2, SPS);
-  // オンライン (worklet reseek) と同一設定: ループなし・音量1.0
-  if (!s.mooPreparation({ startPosMeas: 0, startPosSample: 0, startPosFloat: 0, measEnd: 0, measRepeat: 0, fadeinSec: 0, flags: 0, masterVolume: 1.0 })) return null;
-  const total = s.mooGetSamplingEnd();
-  const out = new Int16Array(total * 2);
-  for (let pos = 0; pos < total; pos += 44100) {
-    const n = Math.min(44100, total - pos);
-    s.Moo(out.subarray(pos * 2), n);
-  }
-  return { data: out, total };
 }
 
 async function renderOnline(bytes: ArrayBuffer, total: number): Promise<Float32Array[] | null> {
@@ -115,13 +95,13 @@ async function main(): Promise<void> {
       continue;
     }
     const ab = await res.arrayBuffer();
-    const offline = renderOffline(new Uint8Array(ab.slice(0)));
+    const offline = renderOffline(new Uint8Array(ab.slice(0)), SPS);
     if (!offline) {
       results.push({ name, ok: false, error: "offline render failed", maxDiff: -1, diffCount: 0, total: 0 });
       setResult();
       continue;
     }
-    const online = await renderOnline(ab.slice(0), offline.total).catch((e: unknown) => {
+    const online = await renderOnline(ab.slice(0), offline.totalSample).catch((e: unknown) => {
       results.push({ name, ok: false, error: `online render failed: ${String(e)}`, maxDiff: -1, diffCount: 0, total: 0 });
       setResult();
       return null;

@@ -65,8 +65,8 @@ function updateTime(): void {
   timeLabel.textContent = `${m}:${String(s).padStart(2, "0")} / ${Math.floor(totalSec / 60)}:${String(Math.floor(totalSec % 60)).padStart(2, "0")}`;
 }
 
-// 全曲ピークをオフスクリーンキャンバスに描画 (Int16 レンダリング結果から)
-function drawPeaksToOffscreen(data: Int16Array, totalSample: number): void {
+// ピークを計算してオフスクリーンキャンバスへ描画する
+function drawPeaks(peakAt: (sampleIdx: number) => number, totalSample: number): void {
   const w = canvas.width;
   const h = canvas.height;
   if (!waveCanvas) waveCanvas = document.createElement("canvas");
@@ -79,7 +79,7 @@ function drawPeaksToOffscreen(data: Int16Array, totalSample: number): void {
     const end = Math.trunc(((i + 1) * totalSample) / w);
     let max = 0;
     for (let j = start; j < end; j++) {
-      const a = Math.abs(data[j * 2]! / 32768);
+      const a = Math.abs(peakAt(j));
       if (a > max) max = a;
     }
     peak[i] = max;
@@ -93,35 +93,16 @@ function drawPeaksToOffscreen(data: Int16Array, totalSample: number): void {
   }
 }
 
+// 全曲ピークをオフスクリーンキャンバスに描画 (Int16 レンダリング結果から)
+function drawPeaksToOffscreen(data: Int16Array, totalSample: number): void {
+  drawPeaks((j) => data[j * 2]! / 32768, totalSample);
+}
+
 // ================= オフライン (AudioBuffer) モード =================
 
 function drawWaveToOffscreen(ab: AudioBuffer): void {
-  const w = canvas.width;
-  const h = canvas.height;
-  if (!waveCanvas) waveCanvas = document.createElement("canvas");
-  waveCanvas.width = w;
-  waveCanvas.height = h;
-  const ctx = waveCanvas.getContext("2d")!;
   const data = ab.getChannelData(0);
-  const len = data.length;
-  const peak = new Float32Array(w);
-  for (let i = 0; i < w; i++) {
-    const start = Math.trunc((i * len) / w);
-    const end = Math.trunc(((i + 1) * len) / w);
-    let max = 0;
-    for (let j = start; j < end; j++) {
-      const a = Math.abs(data[j]!);
-      if (a > max) max = a;
-    }
-    peak[i] = max;
-  }
-  ctx.fillStyle = "#111";
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#4af";
-  for (let i = 0; i < w; i++) {
-    const ph = Math.max(1, Math.trunc(peak[i]! * (h / 2)));
-    ctx.fillRect(i, h / 2 - ph, 1, ph * 2);
-  }
+  drawPeaks((j) => data[j]!, data.length);
 }
 
 function offlineStartPlayback(): void {
