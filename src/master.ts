@@ -5,6 +5,7 @@ import { EventKind, EVENTDEFAULT_BEATNUM, EVENTDEFAULT_BEATTEMPO, EVENTDEFAULT_B
 import type { MemoryIo } from "./data.js";
 import {
   SEEK_SET,
+  SEEK_CUR,
   ioGetInt8,
   ioGetInt16LE,
   ioGetInt32LE,
@@ -152,7 +153,7 @@ export class Master {
     const size = ioGetUint32LE(desc);
     if (size !== 15) return 0;
     if (desc.remain < 15) return 0;
-    desc.seek(SEEK_SET, 15);
+    desc.seek(SEEK_CUR, 15);
     return 5;
   }
 
