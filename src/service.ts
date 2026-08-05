@@ -205,7 +205,8 @@ export class Service {
   private _mooBtNum = 0;
   private _mooFreq: Frequency | null = null;
   private _mooGroupSmps: Int32Array | null = null;
-  private _mooPEve = -1; // evels.records の index
+  private _mooPEve = -1; // _mooRecords の index
+  private _mooRecords: EveRecord[] = [];
   private _mooSmpCount = 0;
   private _mooSmpStart = 0;
   private _mooSmpEnd = 0;
@@ -1223,6 +1224,7 @@ export class Service {
 
     this.tonesClear();
 
+    this._mooRecords = this.evels.records;
     this._mooPEve = 0;
 
     this._mooInitUnitTone();
@@ -1237,7 +1239,7 @@ export class Service {
     for (let u = 0; u < this._unitNum; u++) this._units[u]!.toneEnvelope();
 
     const clock = Math.trunc(this._mooSmpCount / this._mooClockRate);
-    const records = this.evels.records;
+    const records = this._mooRecords;
 
     // events..
     for (; this._mooPEve >= 0 && this._mooPEve < records.length && records[this._mooPEve]!.clock <= clock; this._mooPEve++) {
