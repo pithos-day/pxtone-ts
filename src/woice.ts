@@ -290,39 +290,29 @@ export class Woice {
     osci.readyGetSample(vc.wave.points, vc.wave.num, vc.volume, vi.smpBodyW, vc.wave.reso);
     const isOvertone = vc.type === VoiceType.Overtone;
     vi.bSineOver = false;
-    const body = vi.smpBodyW;
-    if (bps === 8) {
-      const p = vi.pSmpW!;
-      for (let s = 0; s < body; s++) {
-        const osc = isOvertone ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
-        for (let c = 0; c < ch; c++) {
-          let work = (osc * panVolume[c]!) / 64;
-          if (work > 1.0) {
-            work = 1.0;
-            vi.bSineOver = true;
-          }
-          if (work < -1.0) {
-            work = -1.0;
-            vi.bSineOver = true;
-          }
-          p[s * ch + c] = Math.trunc(work * 127) + 128;
+    const p = vi.pSmpW!;
+    const is8bit = bps === 8;
+    for (let s = 0; s < vi.smpBodyW; s++) {
+      const osc = isOvertone ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
+      for (let c = 0; c < ch; c++) {
+        let work = (osc * panVolume[c]!) / 64;
+        if (work > 1.0) {
+          work = 1.0;
+          vi.bSineOver = true;
         }
-      }
-    } else {
-      const p = new Int16Array(vi.pSmpW!.buffer, vi.pSmpW!.byteOffset, vi.pSmpW!.byteLength >> 1);
-      for (let s = 0; s < body; s++) {
-        const osc = isOvertone ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
-        for (let c = 0; c < ch; c++) {
-          let work = (osc * panVolume[c]!) / 64;
-          if (work > 1.0) {
-            work = 1.0;
-            vi.bSineOver = true;
-          }
-          if (work < -1.0) {
-            work = -1.0;
-            vi.bSineOver = true;
-          }
-          p[s * ch + c] = Math.trunc(work * 32767);
+        if (work < -1.0) {
+          work = -1.0;
+          vi.bSineOver = true;
+        }
+        const sample = s * ch + c;
+        if (is8bit) {
+          // 8bit は符号なし (0..255)
+          p[sample] = Math.trunc(work * 127) + 128;
+        } else {
+          // 16bit はリトルエンディアンで 2 バイトに分割して書き込む
+          const v = Math.trunc(work * 32767);
+          p[sample * 2] = v & 0xff;
+          p[sample * 2 + 1] = (v >> 8) & 0xff;
         }
       }
     }
