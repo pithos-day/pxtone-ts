@@ -1235,6 +1235,52 @@ export class Service {
     return true;
   }
 
+  // ON イベント: ノートを発音する。リリース中に次のノートが重なる場合は寿命を制限する
+  private _mooHandleOnEvent(unit: Unit, eve: EveRecord, clock: number, records: EveRecord[]): void {
+    const onCount = Math.trunc((eve.clock + eve.value - clock) * this._mooClockRate);
+    if (onCount <= 0) {
+      unit.toneZeroLives();
+      return;
+    }
+    unit.toneKeyOn();
+    const woice = unit.woice;
+    if (!woice) return;
+    for (let v = 0; v < woice.voiceNum; v++) {
+      const tone = unit.getTone(v);
+      const voiceInst = woice.getInstance(v)!;
+
+      if (voiceInst.envRelease) {
+        // リリース中に次のノートが重なる場合、寿命は「このノートの終端+リリース」と「次のONまで」の短い方に制限する
+        const lifeUntilRelease = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + voiceInst.envRelease;
+        let lifeUntilNextOn: number;
+        const c = eve.clock + eve.value + tone.envReleaseClock;
+        let next: EveRecord | null = null;
+        for (let q = this._mooPEve + 1; q < records.length; q++) {
+          const p = records[q]!;
+          if (p.clock > c) break;
+          if (p.unitNo === eve.unitNo && p.kind === EventKind.ON) {
+            next = p;
+            break;
+          }
+        }
+        if (!next) lifeUntilNextOn = this._mooSmpEnd - Math.trunc(clock * this._mooClockRate);
+        else lifeUntilNextOn = Math.trunc((next.clock - clock) * this._mooClockRate);
+        if (lifeUntilRelease < lifeUntilNextOn) tone.lifeCount = lifeUntilRelease;
+        else tone.lifeCount = lifeUntilNextOn;
+      } else {
+        tone.lifeCount = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate);
+      }
+
+      if (tone.lifeCount > 0) {
+        tone.onCount = onCount;
+        tone.smpPos = 0;
+        tone.envPos = 0;
+        if (voiceInst.envSize) tone.envVolume = tone.envStart = 0; // envelope
+        else tone.envVolume = tone.envStart = 128; // no-envelope
+      }
+    }
+  }
+
   // 1サンプル分を合成して [L,R] を返す。終了時は null
   private _mooPxtoneSample(): [number, number] | null {
     // envelope..
@@ -1246,55 +1292,12 @@ export class Service {
     // events..
     for (; this._mooPEve >= 0 && this._mooPEve < records.length && records[this._mooPEve]!.clock <= clock; this._mooPEve++) {
       const eve = records[this._mooPEve]!;
-      const u = eve.unitNo;
-      const unit = this._units[u]!;
+      const unit = this._units[eve.unitNo]!;
 
       switch (eve.kind) {
-        case EventKind.ON: {
-          const onCount = Math.trunc((eve.clock + eve.value - clock) * this._mooClockRate);
-          if (onCount <= 0) {
-            unit.toneZeroLives();
-            break;
-          }
-          unit.toneKeyOn();
-          const woice = unit.woice;
-          if (!woice) break;
-          for (let v = 0; v < woice.voiceNum; v++) {
-            const tone = unit.getTone(v);
-            const voiceInst = woice.getInstance(v)!;
-
-            if (voiceInst.envRelease) {
-              // リリース中に次のノートが重なる場合、寿命は「このノートの終端+リリース」と「次のONまで」の短い方に制限する
-              const lifeUntilRelease = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + voiceInst.envRelease;
-              let lifeUntilNextOn: number;
-              const c = eve.clock + eve.value + tone.envReleaseClock;
-              let next: EveRecord | null = null;
-              for (let q = this._mooPEve + 1; q < records.length; q++) {
-                const p = records[q]!;
-                if (p.clock > c) break;
-                if (p.unitNo === u && p.kind === EventKind.ON) {
-                  next = p;
-                  break;
-                }
-              }
-              if (!next) lifeUntilNextOn = this._mooSmpEnd - Math.trunc(clock * this._mooClockRate);
-              else lifeUntilNextOn = Math.trunc((next.clock - clock) * this._mooClockRate);
-              if (lifeUntilRelease < lifeUntilNextOn) tone.lifeCount = lifeUntilRelease;
-              else tone.lifeCount = lifeUntilNextOn;
-            } else {
-              tone.lifeCount = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate);
-            }
-
-            if (tone.lifeCount > 0) {
-              tone.onCount = onCount;
-              tone.smpPos = 0;
-              tone.envPos = 0;
-              if (voiceInst.envSize) tone.envVolume = tone.envStart = 0; // envelope
-              else tone.envVolume = tone.envStart = 128; // no-envelope
-            }
-          }
+        case EventKind.ON:
+          this._mooHandleOnEvent(unit, eve, clock, records);
           break;
-        }
         case EventKind.KEY:
           unit.toneKey(eve.value);
           break;
