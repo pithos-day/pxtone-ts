@@ -23,6 +23,7 @@
     "build": "tsup",
     "build:web": "tsup --config tsup.config.web.ts",
     "dev:web": "python3 -m http.server 8080 -d web",
+    "prepare": "pnpm run build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
