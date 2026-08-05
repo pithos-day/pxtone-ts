@@ -28,24 +28,24 @@ const _OCT_TABLE: readonly number[] = [
 
 // 2^(1/divi) を17桁で 10進近似
 function getDivideOctaveRate(divi: number): number {
-  let parameter = 1.0;
+  let approx = 1.0;
   for (let i = 0; i < 17; i++) {
-    let add = 1;
-    for (let j = 0; j < i; j++) add = add * 0.1;
+    let step = 1;
+    for (let j = 0; j < i; j++) step = step * 0.1;
     let j = 0;
-    for (j = 0; j < 10; j++) {
-      const work = parameter + add * j;
-      let result = 1.0;
+    for (; j < 10; j++) {
+      const candidate = approx + step * j;
+      let product = 1.0;
       let k = 0;
-      for (k = 0; k < divi; k++) {
-        result *= work;
-        if (result >= 2.0) break;
+      for (; k < divi; k++) {
+        product *= candidate;
+        if (product >= 2.0) break;
       }
       if (k !== divi) break;
     }
-    parameter += add * (j - 1);
+    approx += step * (j - 1);
   }
-  return parameter;
+  return approx;
 }
 
 export class Frequency {

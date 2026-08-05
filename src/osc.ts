@@ -30,8 +30,8 @@ export class Oscillator {
     const pi = 3.1415926535897932;
     let work = 0;
     for (let o = 0; o < this._pointNum; o++) {
-      const sss = (2 * pi * this._pPoint[o]!.x * index) / this._sampleNum;
-      work += (Math.sin(sss) * this._pPoint[o]!.y) / this._pPoint[o]!.x / 128;
+      const phase = (2 * pi * this._pPoint[o]!.x * index) / this._sampleNum;
+      work += (Math.sin(phase) * this._pPoint[o]!.y) / this._pPoint[o]!.x / 128;
     }
     return (work * this._volume) / 128;
   }

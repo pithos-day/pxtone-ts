@@ -266,13 +266,13 @@ export class Woice {
       if (vc.pan < 64) panVolume[1] = vc.pan;
     }
     osci.readyGetSample(vc.wave.points, vc.wave.num, vc.volume, vi.smpBodyW, vc.wave.reso);
-    const bOvt = vc.type === VoiceType.Overtone;
+    const isOvertone = vc.type === VoiceType.Overtone;
     vi.bSineOver = false;
     const body = vi.smpBodyW;
     if (bps === 8) {
       const p = vi.pSmpW!;
       for (let s = 0; s < body; s++) {
-        const osc = bOvt ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
+        const osc = isOvertone ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
         for (let c = 0; c < ch; c++) {
           let work = (osc * panVolume[c]!) / 64;
           if (work > 1.0) {
@@ -289,7 +289,7 @@ export class Woice {
     } else {
       const p = new Int16Array(vi.pSmpW!.buffer, vi.pSmpW!.byteOffset, vi.pSmpW!.byteLength >> 1);
       for (let s = 0; s < body; s++) {
-        const osc = bOvt ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
+        const osc = isOvertone ? osci.getOneSampleOvertone(s) : osci.getOneSampleCoodinate(s);
         for (let c = 0; c < ch; c++) {
           let work = (osc * panVolume[c]!) / 64;
           if (work > 1.0) {
@@ -529,28 +529,28 @@ export class Woice {
     const version = ioGetInt32LE(io);
     if (version === null) return PxtnErr.DESC_R;
     if (code !== PTV_FILEID) return PxtnErr.INV_CODE;
-    const _total = ioGetInt32LE(io);
-    if (_total === null) return PxtnErr.DESC_R;
+    const total = ioGetInt32LE(io);
+    if (total === null) return PxtnErr.DESC_R;
     if (version > PTV_VERSION) return PxtnErr.FMT_NEW;
     // 残りデータの総サイズ。整合性確認のみに使えるが、ここでは読み捨てる
 
-    const bk = dataReadV(io);
-    if (bk === null) return PxtnErr.DESC_R;
-    this._x3xBasicKey = bk;
-    const w1 = dataReadV(io);
-    if (w1 === null) return PxtnErr.DESC_R;
-    const w2 = dataReadV(io);
-    if (w2 === null) return PxtnErr.DESC_R;
-    if (w1 || w2) return PxtnErr.FMT_UNKNOWN;
+    const x3xBasicKey = dataReadV(io);
+    if (x3xBasicKey === null) return PxtnErr.DESC_R;
+    this._x3xBasicKey = x3xBasicKey;
+    const reserved1 = dataReadV(io);
+    if (reserved1 === null) return PxtnErr.DESC_R;
+    const reserved2 = dataReadV(io);
+    if (reserved2 === null) return PxtnErr.DESC_R;
+    if (reserved1 || reserved2) return PxtnErr.FMT_UNKNOWN;
     const num = dataReadV(io);
     if (num === null) return PxtnErr.DESC_R;
     if (!this.voiceAllocate(num)) return PxtnErr.MEMORY;
 
     for (let v = 0; v < this._voiceNum; v++) {
       const vc = this._voices[v]!;
-      const bk2 = dataReadV(io);
-      if (bk2 === null) return PxtnErr.DESC_R;
-      vc.basicKey = bk2;
+      const basicKey = dataReadV(io);
+      if (basicKey === null) return PxtnErr.DESC_R;
+      vc.basicKey = basicKey;
       const vol = dataReadV(io);
       if (vol === null) return PxtnErr.DESC_R;
       vc.volume = vol;

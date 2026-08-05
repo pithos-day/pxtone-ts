@@ -199,7 +199,7 @@ export class Service {
   private _mooBEndVomit = true;
   private _mooBMuteByUnit = false;
   private _mooBLoop = true;
-  private _mooFadeFade = 0;
+  private _mooFadeDir = 0;
   private _mooMasterVol = 1.0;
   private _mooBtClock = 0;
   private _mooBtNum = 0;
@@ -575,8 +575,8 @@ export class Service {
     else return PxtnErr.FMT_UNKNOWN;
 
     const exeVer = ioGetUint16LE(desc);
-    const dummy = ioGetUint16LE(desc);
-    if (exeVer === null || dummy === null) return PxtnErr.DESC_R;
+    const reserved = ioGetUint16LE(desc);
+    if (exeVer === null || reserved === null) return PxtnErr.DESC_R;
     out.exeVer = exeVer;
     return PxtnErr.OK;
   }
@@ -729,10 +729,10 @@ export class Service {
     if (size === null) return PxtnErr.DESC_R;
     if (size !== 20) return PxtnErr.FMT_UNKNOWN; // u16 + u16 + 16
     const woiceIndex = ioGetU16LE(desc);
-    const rrr = ioGetU16LE(desc);
+    const reserved = ioGetU16LE(desc);
     const name = ioGetBytes(desc, PXTN_MAX_TUNEWOICENAME);
-    if (woiceIndex === null || rrr === null || name === null) return PxtnErr.DESC_R;
-    if (rrr) return PxtnErr.FMT_UNKNOWN;
+    if (woiceIndex === null || reserved === null || name === null) return PxtnErr.DESC_R;
+    if (reserved) return PxtnErr.FMT_UNKNOWN;
     if (woiceIndex >= this._woiceNum) return PxtnErr.FMT_UNKNOWN;
     if (!this._woices[woiceIndex]!.setNameBuf(name, PXTN_MAX_TUNEWOICENAME)) return PxtnErr.FATAL;
     return PxtnErr.OK;
@@ -744,10 +744,10 @@ export class Service {
     if (size === null) return PxtnErr.DESC_R;
     if (size !== 20) return PxtnErr.FMT_UNKNOWN; // u16 + u16 + 16
     const unitIndex = ioGetU16LE(desc);
-    const rrr = ioGetU16LE(desc);
+    const reserved = ioGetU16LE(desc);
     const name = ioGetBytes(desc, PXTN_MAX_TUNE_UNIT_NAME);
-    if (unitIndex === null || rrr === null || name === null) return PxtnErr.DESC_R;
-    if (rrr) return PxtnErr.FMT_UNKNOWN;
+    if (unitIndex === null || reserved === null || name === null) return PxtnErr.DESC_R;
+    if (reserved) return PxtnErr.FMT_UNKNOWN;
     if (unitIndex >= this._unitNum) return PxtnErr.FMT_UNKNOWN;
     if (!this._units[unitIndex]!.setNameBuf(name)) return PxtnErr.FATAL;
     return PxtnErr.OK;
@@ -759,9 +759,9 @@ export class Service {
     if (size === null) return PxtnErr.DESC_R;
     if (size !== 4) return PxtnErr.FMT_UNKNOWN;
     const num = ioGetU16LE(desc);
-    const rrr = ioGetU16LE(desc);
-    if (num === null || rrr === null) return PxtnErr.DESC_R;
-    if (rrr) return PxtnErr.FMT_UNKNOWN;
+    const reserved = ioGetU16LE(desc);
+    if (num === null || reserved === null) return PxtnErr.DESC_R;
+    if (reserved) return PxtnErr.FMT_UNKNOWN;
     if (num > this._unitMax) return PxtnErr.FMT_NEW;
     if (num < 0) return PxtnErr.FMT_UNKNOWN;
     pNum.value = num;
@@ -887,7 +887,6 @@ export class Service {
   read(desc: MemoryIo): PxtnErr {
     if (!this._bInit) return PxtnErr.INIT;
     let res: PxtnErr = PxtnErr.OK;
-    const exeVer = { value: 0 };
     const fmtVer: { fmt: FmtVer; exeVer: number } = { fmt: FmtVer.Unknown, exeVer: 0 };
     const eventNum = { value: 0 };
 
@@ -905,7 +904,6 @@ export class Service {
 
     res = this._readVersion(desc, fmtVer);
     if (res !== PxtnErr.OK) return res;
-    void exeVer;
 
     if (fmtVer.fmt >= FmtVer.V5) this.evels.linearStart();
     else this.evels.x4xReadStart();
@@ -994,17 +992,18 @@ export class Service {
 
   write(desc: MemoryIo, bTune: boolean, exeVer: number): PxtnErr {
     if (!this._bInit) return PxtnErr.INIT;
-    const rough = bTune ? 10 : 1;
+    // ビート分解能: tune は 10 (CLOCK_ROUGH) に量子化して書き出す
+    const quantizeBits = bTune ? 10 : 1;
     const code = bTune ? CODE_TUNE_V5 : CODE_PROJ_V5;
     writeAscii(desc, code);
     ioPutU16LE(desc, exeVer);
     ioPutU16LE(desc, 0);
 
     writeAscii(desc, CODE_MASTERV5);
-    if (!this.master.ioWV5(desc, rough)) return PxtnErr.DESC_W;
+    if (!this.master.ioWV5(desc, quantizeBits)) return PxtnErr.DESC_W;
 
     writeAscii(desc, CODE_EVENT_V5);
-    if (!this.evels.ioWrite(desc, rough)) return PxtnErr.DESC_W;
+    if (!this.evels.ioWrite(desc, quantizeBits)) return PxtnErr.DESC_W;
 
     if (this.text.hasName) {
       writeAscii(desc, CODE_TEXTNAME);
@@ -1025,26 +1024,26 @@ export class Service {
     }
 
     for (let w = 0; w < this._woiceNum; w++) {
-      const pW = this._woices[w]!;
-      switch (pW.type) {
+      const woice = this._woices[w]!;
+      switch (woice.type) {
         case WoiceType.PCM:
           writeAscii(desc, CODE_MATEPCM);
-          if (!pW.ioMatePcmW(desc)) return PxtnErr.DESC_W;
+          if (!woice.ioMatePcmW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.PTV:
           writeAscii(desc, CODE_MATEPTV);
-          if (!pW.ioMatePtvW(desc)) return PxtnErr.DESC_W;
+          if (!woice.ioMatePtvW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.PTN:
           writeAscii(desc, CODE_MATEPTN);
-          if (!pW.ioMatePtnW(desc)) return PxtnErr.DESC_W;
+          if (!woice.ioMatePtnW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.OGGV:
           return PxtnErr.OGG_NO_SUPPORTED;
         default:
           return PxtnErr.INV_DATA;
       }
-      if (!bTune && pW.isNameBuf()) {
+      if (!bTune && woice.isNameBuf()) {
         writeAscii(desc, CODE_ASSIWOIC);
         if (!this._ioAssiWoiceW(desc, w)) return PxtnErr.DESC_W;
       }
@@ -1139,13 +1138,13 @@ export class Service {
     // フェード長は 8bit 固定小数 (1/256 サンプル単位) で保持する
     this._mooFadeMax = Math.trunc(this._dstSps * sec) >> 8;
     if (fade < 0) {
-      this._mooFadeFade = -1;
+      this._mooFadeDir = -1;
       this._mooFadeCount = this._mooFadeMax << 8;
     } else if (fade > 0) {
-      this._mooFadeFade = 1;
+      this._mooFadeDir = 1;
       this._mooFadeCount = 0;
     } else {
-      this._mooFadeFade = 0;
+      this._mooFadeDir = 0;
       this._mooFadeCount = 0;
     }
     return true;
@@ -1248,26 +1247,27 @@ export class Service {
     for (; this._mooPEve >= 0 && this._mooPEve < records.length && records[this._mooPEve]!.clock <= clock; this._mooPEve++) {
       const eve = records[this._mooPEve]!;
       const u = eve.unitNo;
-      const pU = this._units[u]!;
+      const unit = this._units[u]!;
 
       switch (eve.kind) {
         case EventKind.ON: {
           const onCount = Math.trunc((eve.clock + eve.value - clock) * this._mooClockRate);
           if (onCount <= 0) {
-            pU.toneZeroLives();
+            unit.toneZeroLives();
             break;
           }
-          pU.toneKeyOn();
-          const pWc = pU.woice;
-          if (!pWc) break;
-          for (let v = 0; v < pWc.voiceNum; v++) {
-            const pTone = pU.getTone(v);
-            const pVi = pWc.getInstance(v)!;
+          unit.toneKeyOn();
+          const woice = unit.woice;
+          if (!woice) break;
+          for (let v = 0; v < woice.voiceNum; v++) {
+            const tone = unit.getTone(v);
+            const voiceInst = woice.getInstance(v)!;
 
-            if (pVi.envRelease) {
-              const maxLifeCount1 = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + pVi.envRelease;
-              let maxLifeCount2: number;
-              const c = eve.clock + eve.value + pTone.envReleaseClock;
+            if (voiceInst.envRelease) {
+              // リリース中に次のノートが重なる場合、寿命は「このノートの終端+リリース」と「次のONまで」の短い方に制限する
+              const lifeUntilRelease = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + voiceInst.envRelease;
+              let lifeUntilNextOn: number;
+              const c = eve.clock + eve.value + tone.envReleaseClock;
               let next: EveRecord | null = null;
               for (let q = this._mooPEve + 1; q < records.length; q++) {
                 const p = records[q]!;
@@ -1277,41 +1277,41 @@ export class Service {
                   break;
                 }
               }
-              if (!next) maxLifeCount2 = this._mooSmpEnd - Math.trunc(clock * this._mooClockRate);
-              else maxLifeCount2 = Math.trunc((next.clock - clock) * this._mooClockRate);
-              if (maxLifeCount1 < maxLifeCount2) pTone.lifeCount = maxLifeCount1;
-              else pTone.lifeCount = maxLifeCount2;
+              if (!next) lifeUntilNextOn = this._mooSmpEnd - Math.trunc(clock * this._mooClockRate);
+              else lifeUntilNextOn = Math.trunc((next.clock - clock) * this._mooClockRate);
+              if (lifeUntilRelease < lifeUntilNextOn) tone.lifeCount = lifeUntilRelease;
+              else tone.lifeCount = lifeUntilNextOn;
             } else {
-              pTone.lifeCount = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate);
+              tone.lifeCount = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate);
             }
 
-            if (pTone.lifeCount > 0) {
-              pTone.onCount = onCount;
-              pTone.smpPos = 0;
-              pTone.envPos = 0;
-              if (pVi.envSize) pTone.envVolume = pTone.envStart = 0; // envelope
-              else pTone.envVolume = pTone.envStart = 128; // no-envelope
+            if (tone.lifeCount > 0) {
+              tone.onCount = onCount;
+              tone.smpPos = 0;
+              tone.envPos = 0;
+              if (voiceInst.envSize) tone.envVolume = tone.envStart = 0; // envelope
+              else tone.envVolume = tone.envStart = 128; // no-envelope
             }
           }
           break;
         }
         case EventKind.KEY:
-          pU.toneKey(eve.value);
+          unit.toneKey(eve.value);
           break;
         case EventKind.PAN_VOLUME:
-          pU.tonePanVolume(this._dstChNum, eve.value);
+          unit.tonePanVolume(this._dstChNum, eve.value);
           break;
         case EventKind.PAN_TIME:
-          pU.tonePanTime(this._dstChNum, eve.value, this._dstSps);
+          unit.tonePanTime(this._dstChNum, eve.value, this._dstSps);
           break;
         case EventKind.VELOCITY:
-          pU.toneVelocity(eve.value);
+          unit.toneVelocity(eve.value);
           break;
         case EventKind.VOLUME:
-          pU.toneVolume(eve.value);
+          unit.toneVolume(eve.value);
           break;
         case EventKind.PORTAMENT:
-          pU.tonePortament(Math.trunc(eve.value * this._mooClockRate));
+          unit.tonePortament(Math.trunc(eve.value * this._mooClockRate));
           break;
         case EventKind.BEATCLOCK:
         case EventKind.BEATTEMPO:
@@ -1320,13 +1320,13 @@ export class Service {
         case EventKind.LAST:
           break;
         case EventKind.VOICENO:
-          this._mooResetVoiceOn(pU, eve.value);
+          this._mooResetVoiceOn(unit, eve.value);
           break;
         case EventKind.GROUPNO:
-          pU.toneGroupNo(eve.value);
+          unit.toneGroupNo(eve.value);
           break;
         case EventKind.TUNING:
-          pU.toneTuning(int32ToFloat(eve.value));
+          unit.toneTuning(int32ToFloat(eve.value));
           break;
       }
     }
@@ -1344,19 +1344,19 @@ export class Service {
       for (let d = 0; d < this._delayNum; d++) this._delays[d]!.toneSupple(ch, this._mooGroupSmps!);
 
       // collect.
-      let work = 0;
-      for (let g = 0; g < this._groupNum; g++) work += this._mooGroupSmps![g]!;
+      let sample = 0;
+      for (let g = 0; g < this._groupNum; g++) sample += this._mooGroupSmps![g]!;
 
       // フェード: count>>8 は 8bit 固定小数の経過位置なので、max で割って 0..1 のゲインにする
-      if (this._mooFadeFade) work = Math.trunc((work * (this._mooFadeCount >> 8)) / this._mooFadeMax);
+      if (this._mooFadeDir) sample = Math.trunc((sample * (this._mooFadeCount >> 8)) / this._mooFadeMax);
 
       // master volume
-      work = Math.trunc(work * this._mooMasterVol);
+      sample = Math.trunc(sample * this._mooMasterVol);
 
       // to buffer..
-      if (work > this._mooTop) work = this._mooTop;
-      if (work < -this._mooTop) work = -this._mooTop;
-      out[ch] = work;
+      if (sample > this._mooTop) sample = this._mooTop;
+      if (sample < -this._mooTop) sample = -this._mooTop;
+      out[ch] = sample;
     }
 
     // increments..
@@ -1373,13 +1373,13 @@ export class Service {
     for (let d = 0; d < this._delayNum; d++) this._delays[d]!.toneIncrement();
 
     // fade out
-    if (this._mooFadeFade < 0) {
+    if (this._mooFadeDir < 0) {
       if (this._mooFadeCount > 0) this._mooFadeCount--;
       else return null;
-    } else if (this._mooFadeFade > 0) {
+    } else if (this._mooFadeDir > 0) {
       // fade in
       if (this._mooFadeCount < this._mooFadeMax << 8) this._mooFadeCount++;
-      else this._mooFadeFade = 0;
+      else this._mooFadeDir = 0;
     }
 
     if (this._mooSmpCount >= this._mooSmpEnd) {
@@ -1391,21 +1391,21 @@ export class Service {
     return out;
   }
 
-  private _mooResetVoiceOn(pU: Unit, w: number): boolean {
+  private _mooResetVoiceOn(unit: Unit, w: number): boolean {
     if (!this._bInit) return false;
-    const pWc = this.woiceGet(w);
-    if (!pWc) return false;
-    pU.setWoice(pWc);
-    for (let v = 0; v < pWc.voiceNum; v++) {
-      const pInst = pWc.getInstance(v)!;
-      const pVc = pWc.getVoice(v)!;
+    const woice = this.woiceGet(w);
+    if (!woice) return false;
+    unit.setWoice(woice);
+    for (let v = 0; v < woice.voiceNum; v++) {
+      const voiceInst = woice.getInstance(v)!;
+      const voice = woice.getVoice(v)!;
       let ofsFreq = 0;
-      if (pVc.voiceFlags & PTV_VOICEFLAG_BEATFIT) {
-        ofsFreq = (pInst.smpBodyW * this._mooBtTempo) / (44100 * 60 * pVc.tuning);
+      if (voice.voiceFlags & PTV_VOICEFLAG_BEATFIT) {
+        ofsFreq = (voiceInst.smpBodyW * this._mooBtTempo) / (44100 * 60 * voice.tuning);
       } else {
-        ofsFreq = this._mooFreq!.get(EVENTDEFAULT_BASICKEY - pVc.basicKey) * pVc.tuning;
+        ofsFreq = this._mooFreq!.get(EVENTDEFAULT_BASICKEY - voice.basicKey) * voice.tuning;
       }
-      pU.toneResetAnd2prm(v, Math.trunc(pInst.envRelease / this._mooClockRate), ofsFreq);
+      unit.toneResetAnd2prm(v, Math.trunc(voiceInst.envRelease / this._mooClockRate), ofsFreq);
     }
     return true;
   }
@@ -1413,9 +1413,9 @@ export class Service {
   private _mooInitUnitTone(): boolean {
     if (!this._bInit) return false;
     for (let u = 0; u < this._unitNum; u++) {
-      const pU = this._units[u]!;
-      pU.toneInit();
-      this._mooResetVoiceOn(pU, EVENTDEFAULT_VOICENO);
+      const unit = this._units[u]!;
+      unit.toneInit();
+      this._mooResetVoiceOn(unit, EVENTDEFAULT_VOICENO);
     }
     return true;
   }

@@ -106,10 +106,10 @@ export class Master {
     if (this._last_meas > this._meas_num) this._last_meas = this._meas_num;
   }
 
-  // 15byte固定 + size（rough は .ptcop 読み込み時は 1）
-  ioWV5(desc: MemoryIo, rough: number): boolean {
+  // 15byte固定 + size（quantizeBits は .ptcop 読み込み時は 1）
+  ioWV5(desc: MemoryIo, quantizeBits: number): boolean {
     const size = 15;
-    const bClock = Math.trunc(this._beat_clock / rough);
+    const bClock = Math.trunc(this._beat_clock / quantizeBits);
     ioPutUint32LE(desc, size);
     ioPutInt16LE(desc, bClock);
     ioPutInt8(desc, this._beat_num);

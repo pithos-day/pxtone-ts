@@ -533,12 +533,12 @@ export class Evelist {
       }
       while (p >= 0) {
         if (this._eves[p]!.unitNo === unitNo) {
-          const c = this._eves[p]!.clock + shift;
-          const k = this._eves[p]!.kind;
-          const v = this._eves[p]!.value;
+          const clock = this._eves[p]!.clock + shift;
+          const kind = this._eves[p]!.kind;
+          const value = this._eves[p]!.value;
           const pNext = this._eves[p]!.next;
           this.recCut(p);
-          if (c >= 0) this.recordAddI(c, unitNo, k, v);
+          if (clock >= 0) this.recordAddI(clock, unitNo, kind, value);
           count++;
           p = pNext;
         } else {
@@ -670,7 +670,7 @@ export class Evelist {
 
   // ---- io ----
 
-  ioWrite(desc: MemoryIo, rough: number): boolean {
+  ioWrite(desc: MemoryIo, quantizeBits: number): boolean {
     const eveNum = this.count;
     let relativeSize = 0;
 
@@ -688,8 +688,8 @@ export class Evelist {
     let absolute = 0;
     for (const p of this.records) {
       const clock = p.clock - absolute;
-      const value = eventKindIsTail(p.kind) ? Math.trunc(p.value / rough) : p.value;
-      dataWriteV(desc, Math.trunc(clock / rough));
+      const value = eventKindIsTail(p.kind) ? Math.trunc(p.value / quantizeBits) : p.value;
+      dataWriteV(desc, Math.trunc(clock / quantizeBits));
       ioPutU8(desc, p.unitNo);
       ioPutU8(desc, p.kind);
       dataWriteV(desc, value);
@@ -725,11 +725,11 @@ export class Evelist {
     if (size === null || eveNum === null) return 0;
 
     for (let e = 0; e < eveNum; e++) {
-      const c = dataReadV(desc);
-      const u = ioGetU8(desc);
-      const k = ioGetU8(desc);
-      const v = dataReadV(desc);
-      if (c === null || u === null || k === null || v === null) return 0;
+      const clock = dataReadV(desc);
+      const unitNo = ioGetU8(desc);
+      const kind = ioGetU8(desc);
+      const value = dataReadV(desc);
+      if (clock === null || unitNo === null || kind === null || value === null) return 0;
     }
     return eveNum;
   }
@@ -776,12 +776,12 @@ export class Evelist {
     if (!desc) return PxtnErr.PARAM;
     const size = ioGetInt32LE(desc);
     if (size === null) return PxtnErr.DESC_R;
-    const _unitIndex = ioGetU16LE(desc);
-    const _eventKind = ioGetU16LE(desc);
+    const unitIndex = ioGetU16LE(desc);
+    const eventKind = ioGetU16LE(desc);
     const dataNum = ioGetU16LE(desc);
-    const _rrr = ioGetU16LE(desc);
+    const reserved = ioGetU16LE(desc);
     const eventNum = ioGetUint32LE(desc);
-    if (_unitIndex === null || _eventKind === null || dataNum === null || _rrr === null || eventNum === null) {
+    if (unitIndex === null || eventKind === null || dataNum === null || reserved === null || eventNum === null) {
       return PxtnErr.DESC_R;
     }
     void size;
@@ -790,9 +790,9 @@ export class Evelist {
 
     let e = 0;
     for (; e < eventNum; e++) {
-      const a = dataReadV(desc);
-      const b = dataReadV(desc);
-      if (a === null || b === null) break;
+      const clock = dataReadV(desc);
+      const value = dataReadV(desc);
+      if (clock === null || value === null) break;
     }
     if (e !== eventNum) return PxtnErr.DESC_BROKEN;
     return eventNum;

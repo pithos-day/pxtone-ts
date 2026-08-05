@@ -20,7 +20,7 @@ enum _RandomType {
 }
 
 interface _Oscillator {
-  incriment: number;
+  increment: number;
   offset: number;
   volume: number;
   pSmp: Int16Array | null;
@@ -52,7 +52,7 @@ interface _Unit {
 
 function newOsc(): _Oscillator {
   return {
-    incriment: 0,
+    increment: 0,
     offset: 0,
     volume: 0,
     pSmp: null,
@@ -79,7 +79,7 @@ function setOscillator(
   else if (from.type === WaveType.Random2) to.ranType = _RandomType.Rect;
   else to.ranType = _RandomType.None;
 
-  to.incriment = (_BASIC_SPS / sps) * (from.freq / _BASIC_FREQUENCY);
+  to.increment = (_BASIC_SPS / sps) * (from.freq / _BASIC_FREQUENCY);
   if (to.ranType !== _RandomType.None) to.offset = 0;
   else to.offset = _smp_num * (from.offset / 100);
   to.volume = from.volume / 100;
@@ -366,18 +366,18 @@ export class NoiseBuilder {
           else work *= pU.enveMagStart;
           store += work;
         }
-        let byte4 = Math.trunc(store);
-        if (byte4 > _SAMPLING_TOP) byte4 = _SAMPLING_TOP;
-        if (byte4 < -_SAMPLING_TOP) byte4 = -_SAMPLING_TOP;
+        let sample = Math.trunc(store);
+        if (sample > _SAMPLING_TOP) sample = _SAMPLING_TOP;
+        if (sample < -_SAMPLING_TOP) sample = -_SAMPLING_TOP;
         if (bps === 8) {
-          p[pos] = (byte4 >> 8) + 128;
+          p[pos] = (sample >> 8) + 128;
           pos += 1;
         } else {
-          p16![s * ch + c] = byte4;
+          p16![s * ch + c] = sample;
         }
       }
 
-      // incriment
+      // increment
       for (let u = 0; u < unitNum; u++) {
         const pU = units[u]!;
         if (!pU.bEnable) continue;
@@ -394,9 +394,9 @@ export class NoiseBuilder {
         if (po.bReverse) fre *= -1;
         fre *= po.volume;
 
-        this._incriment(pU.main, pU.main.incriment * this._freq!.get(getInt(fre)), this._tables[WaveType.Random]!);
-        this._incriment(pU.freq, pU.freq.incriment, this._tables[WaveType.Random]!);
-        this._incriment(pU.volu, pU.volu.incriment, this._tables[WaveType.Random]!);
+        this._increment(pU.main, pU.main.increment * this._freq!.get(getInt(fre)), this._tables[WaveType.Random]!);
+        this._increment(pU.freq, pU.freq.increment, this._tables[WaveType.Random]!);
+        this._increment(pU.volu, pU.volu.increment, this._tables[WaveType.Random]!);
 
         if (pU.enveIndex < pU.enveNum) {
           pU.enveCount++;
@@ -419,7 +419,7 @@ export class NoiseBuilder {
     return pcm;
   }
 
-  private _incriment(osc: _Oscillator, incr: number, randTable: Int16Array): void {
+  private _increment(osc: _Oscillator, incr: number, randTable: Int16Array): void {
     osc.offset += incr;
     if (osc.offset > _smp_num) {
       osc.offset -= _smp_num;
