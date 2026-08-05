@@ -721,16 +721,13 @@ export class Evelist {
     const eveNum = ioGetInt32LE(desc);
     if (size === null || eveNum === null) return 0;
 
-    let count = 0;
     for (let e = 0; e < eveNum; e++) {
       const c = dataReadV(desc);
       const u = ioGetU8(desc);
       const k = ioGetU8(desc);
       const v = dataReadV(desc);
       if (c === null || u === null || k === null || v === null) return 0;
-      count++;
     }
-    if (count !== eveNum) return 0;
     return eveNum;
   }
 

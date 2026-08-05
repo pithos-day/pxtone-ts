@@ -126,13 +126,6 @@ it("tune write/read keeps same event data", () => {
   expect(s2.evels.count).toBe(2);
 });
 
-function ioFromWoice(w: Woice): MemoryIo {
-  const io = new MemoryIo();
-  w.ioMatePtvW(io);
-  io.seek(0, 0);
-  return io;
-}
-
 function writeAscii(io: MemoryIo, s: string): void {
   const b = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);

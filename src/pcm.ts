@@ -218,7 +218,6 @@ export class Pcm {
     tail = Math.trunc(((tail * newSps) + this._sps - 1) / this._sps);
     const workSize = head + body + tail;
 
-    let per: number;
     if (this._ch === 2 && this._bps === 16) {
       this._smpHead = head / 4;
       this._smpBody = body / 4;

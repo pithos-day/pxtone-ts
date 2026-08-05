@@ -100,7 +100,6 @@ function newVoiceInstance(): VoiceInstance {
 }
 
 function releaseVoiceUnit(unit: VoiceUnit): void {
-  unit.envelope.points = [];
   unit.wave.points = [];
   unit.wave.num = 0;
   unit.wave.reso = 0;
