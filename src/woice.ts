@@ -731,15 +731,15 @@ export class Woice {
   }
 
   ioMatePtnR(io: MemoryIo): PxtnErr {
-    const unitNo = ioGetInt32LE(io);
+    const size = ioGetUint32LE(io);
+    if (size === null) return PxtnErr.DESC_R;
+    void size;
+    const unitNo = ioGetUint16LE(io);
     if (unitNo === null) return PxtnErr.DESC_R;
     void unitNo;
-    const ptn_x3x = ioGetInt32LE(io);
-    if (ptn_x3x === null) return PxtnErr.DESC_R;
-    void ptn_x3x;
-    const basicKey = ioGetInt32LE(io);
+    const basicKey = ioGetUint16LE(io);
     if (basicKey === null) return PxtnErr.DESC_R;
-    const voiceFlags = ioGetInt32LE(io);
+    const voiceFlags = ioGetUint32LE(io);
     if (voiceFlags === null) return PxtnErr.DESC_R;
     const tuning = ioGetFloatLE(io);
     if (tuning === null) return PxtnErr.DESC_R;
