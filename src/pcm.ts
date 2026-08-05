@@ -1,8 +1,7 @@
 // pxtnPulse_PCM.cpp 相当（WAV/PCM 読み書き・変換）
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetUint16LE, ioGetUint32LE, ioPutUint32LE } from "./data.js";
-import { ioPutU16LE, ioGetU16LE } from "./data.js";
+import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetU16LE, ioGetUint16LE, ioGetUint32LE, ioPutAsciiString, ioPutU16LE, ioPutUint32LE } from "./data.js";
 
 const _CHUNK_HEADER = 16;
 
@@ -110,10 +109,10 @@ export class Pcm {
       listSize = 4 + 4 + 4 + isftSize;
       riffSize += 8 + listSize;
     }
-    putTag(io, "RIFF");
+    ioPutAsciiString(io, "RIFF");
     ioPutUint32LE(io, riffSize);
-    putTag(io, "WAVE");
-    putTag(io, "fmt ");
+    ioPutAsciiString(io, "WAVE");
+    ioPutAsciiString(io, "fmt ");
     ioPutUint32LE(io, 0x12);
     ioPutU16LE(io, 0x0001);
     ioPutU16LE(io, this._ch);
@@ -123,17 +122,17 @@ export class Pcm {
     ioPutU16LE(io, this._bps);
     ioPutU16LE(io, 0);
     if (bText) {
-      putTag(io, "LIST");
+      ioPutAsciiString(io, "LIST");
       ioPutUint32LE(io, listSize);
-      putTag(io, "INFO");
-      putTag(io, "ISFT");
+      ioPutAsciiString(io, "INFO");
+      ioPutAsciiString(io, "ISFT");
       ioPutUint32LE(io, isftSize);
-      writeAscii(io, pstrLIST!);
+      ioPutAsciiString(io, pstrLIST!);
     }
-    putTag(io, "fact");
+    ioPutAsciiString(io, "fact");
     ioPutUint32LE(io, 0x04);
     ioPutUint32LE(io, this._smpHead + this._smpBody + this._smpTail);
-    putTag(io, "data");
+    ioPutAsciiString(io, "data");
     ioPutUint32LE(io, sampleSize);
     io.write(this._pSmp, 1, sampleSize);
     return true;
@@ -348,18 +347,6 @@ export class Pcm {
   get bufSize(): number {
     return ((this._smpHead + this._smpBody + this._smpTail) * this._ch * this._bps) / 8;
   }
-}
-
-function putTag(io: MemoryIo, s: string): void {
-  const tag = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) tag[i] = s.charCodeAt(i);
-  io.write(tag, 1, s.length);
-}
-
-function writeAscii(io: MemoryIo, s: string): void {
-  const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
-  io.write(b, 1, s.length);
 }
 
 function putI16(dst: Uint8Array, off: number, v: number): void {

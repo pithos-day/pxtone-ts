@@ -2,7 +2,7 @@
 // pxtnPulse_Noise.h の pxNOISEDESIGN_* / pxWAVETYPE を含む
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, SEEK_CUR, dataCheckVSize, dataReadV, dataWriteV, ioGetInt8, ioGetUint32LE, ioPutU8, ioPutUint32LE } from "./data.js";
+import { MemoryIo, SEEK_CUR, dataCheckVSize, dataReadV, dataWriteV, ioGetBytes, ioGetInt8, ioGetUint32LE, ioPutAsciiString, ioPutU8, ioPutUint32LE } from "./data.js";
 import type { PulsePoint } from "./osc.js";
 
 export enum WaveType {
@@ -165,7 +165,7 @@ export class Noise {
   write(io: MemoryIo, pAdd?: number): boolean {
     // C++ の *p_add は現在の IO 位置（絶対バイト数）に一致すると仮定
     let seek = pAdd ?? io.position;
-    if (!writeAscii(io, NOISE_FILEID)) return false;
+    if (!ioPutAsciiString(io, NOISE_FILEID)) return false;
     ioPutUint32LE(io, NOISE_VERSION);
     seek += 12;
     if (!dataWriteV(io, this._smpNum44k)) return false;
@@ -364,16 +364,9 @@ function compareOsci(a: NoiseOscillator, b: NoiseOscillator): number {
   return 0;
 }
 
-function writeAscii(io: MemoryIo, s: string): boolean {
-  const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
-  return io.write(b, 1, s.length);
-}
-
 function readAsciiExact(io: MemoryIo, n: number): string | null {
-  if (io.remain < n) return null;
-  const b = new Uint8Array(n);
-  if (!io.read(b, 1, n)) return null;
+  const b = ioGetBytes(io, n);
+  if (b === null) return null;
   let s = "";
   for (const c of b) s += String.fromCharCode(c);
   return s;

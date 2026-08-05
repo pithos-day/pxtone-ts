@@ -1,7 +1,7 @@
 // pxtnUnit.cpp 相当（1トラック分の再生状態）
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, ioGetInt32LE, ioGetU16LE, ioGetBytes } from "./data.js";
+import { MemoryIo, asciiBytesToString, ioGetInt32LE, ioGetU16LE, ioGetBytes } from "./data.js";
 import type { Woice, VoiceInstance } from "./woice.js";
 import { PXTN_BUFSIZE_TIMEPAN, PXTN_MAX_CHANNEL, PXTN_MAX_TUNEWOICENAME, PXTN_MAX_UNIT_CONTROL_VOICE } from "./constants.js";
 import {
@@ -103,14 +103,7 @@ export class Unit {
     const size = name.length;
     if (size > PXTN_MAX_TUNEWOICENAME) return false;
     if (typeof name === "string") this._name = name;
-    else {
-      let s = "";
-      for (const c of name) {
-        if (c === 0) break;
-        s += String.fromCharCode(c);
-      }
-      this._name = s;
-    }
+    else this._name = asciiBytesToString(name);
     return true;
   }
   get name(): string {

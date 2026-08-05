@@ -2,7 +2,29 @@
 // 音色データ + PCM キャッシュ変換
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, SEEK_CUR, dataCheckVSize, dataReadV, dataWriteV, ioGetBytes, ioGetFloatLE, ioGetInt32LE, ioGetU16LE, ioGetU8, ioGetUint16LE, ioGetUint32LE, ioPutFloatLE } from "./data.js";
+import {
+  MemoryIo,
+  SEEK_CUR,
+  dataCheckVSize,
+  dataReadV,
+  dataWriteV,
+  floatToInt32Bits,
+  int32ToFloat,
+  ioGetBytes,
+  ioGetFloatLE,
+  ioGetInt32LE,
+  ioGetU16LE,
+  ioGetU8,
+  ioGetUint16LE,
+  ioGetUint32LE,
+  ioPutAsciiString,
+  ioPutFloatLE,
+  ioPutInt32LE,
+  ioPutU16LE,
+  ioPutU8,
+  ioPutUint32LE,
+  stringToAsciiBytes,
+} from "./data.js";
 import { Pcm } from "./pcm.js";
 import { Noise } from "./noise.js";
 import type { NoiseBuilder } from "./noise-builder.js";
@@ -140,7 +162,7 @@ export class Woice {
   }
 
   setNameBuf(name: Uint8Array | string, bufSize?: number): boolean {
-    const bytes = typeof name === "string" ? stringToBytes(name) : name;
+    const bytes = typeof name === "string" ? stringToAsciiBytes(name) : name;
     const size = bufSize ?? bytes.length;
     if (size < 0 || size > PXTN_MAX_TUNEWOICENAME) return false;
     this._name = new Uint8Array(PXTN_MAX_TUNEWOICENAME);
@@ -413,9 +435,9 @@ export class Woice {
 
   ptvWrite(io: MemoryIo): number {
     let total = 0;
-    if (!writeAscii8(io, PTV_FILEID)) return -1;
-    writeU32LE(io, PTV_VERSION);
-    writeI32LE(io, 0);
+    if (!ioPutAsciiString(io, PTV_FILEID)) return -1;
+    ioPutUint32LE(io, PTV_VERSION);
+    ioPutInt32LE(io, 0);
     if (!dataWriteV(io, 0)) return -1;
     total += dataCheckVSize(0);
     if (!dataWriteV(io, 0)) return -1;
@@ -426,7 +448,7 @@ export class Woice {
     total += dataCheckVSize(this._voiceNum);
     for (let v = 0; v < this._voiceNum; v++) {
       const vc = this._voices[v]!;
-      const vals = [vc.basicKey, vc.volume, vc.pan, floatToIntBits(vc.tuning), vc.voiceFlags, vc.dataFlags];
+      const vals = [vc.basicKey, vc.volume, vc.pan, floatToInt32Bits(vc.tuning), vc.voiceFlags, vc.dataFlags];
       for (const val of vals) {
         if (!dataWriteV(io, val)) return -1;
         total += dataCheckVSize(val);
@@ -444,7 +466,7 @@ export class Woice {
     }
     // 先頭のサイズフィールドに総バイト数を書き戻す
     if (!io.seek(SEEK_CUR, -(total + 4))) return -1;
-    writeI32LE(io, total);
+    ioPutInt32LE(io, total);
     if (!io.seek(SEEK_CUR, total)) return -1;
     return 16 + total;
   }
@@ -460,10 +482,10 @@ export class Woice {
         if (!dataWriteV(io, vc.wave.reso)) return -1;
         add += dataCheckVSize(vc.wave.reso);
         for (let i = 0; i < vc.wave.num; i++) {
-          ioPutU8w(io, vc.wave.points[i]!.x & 0xff);
+          ioPutU8(io, vc.wave.points[i]!.x & 0xff);
           add += 1;
           // y は符号付き (-128..127) のため、int8 に符号拡張してから 8bit として書き出す
-          ioPutU8w(io, (vc.wave.points[i]!.y << 24) >> 24 & 0xff);
+          ioPutU8(io, (vc.wave.points[i]!.y << 24) >> 24 & 0xff);
           add += 1;
         }
         break;
@@ -559,7 +581,7 @@ export class Woice {
       vc.pan = pan;
       const tune = dataReadV(io);
       if (tune === null) return PxtnErr.DESC_R;
-      vc.tuning = intBitsToFloat(tune);
+      vc.tuning = int32ToFloat(tune);
       const vf = dataReadV(io);
       if (vf === null) return PxtnErr.DESC_R;
       vc.voiceFlags = vf;
@@ -659,15 +681,15 @@ export class Woice {
     const vc = this._voices[0]!;
     const pcm = vc.pcm;
     const size = 24 + pcm.bufSize;
-    writeU32LE(io, size);
-    writeU16LE(io, 0); // x3x_unit_no
-    writeU16LE(io, vc.basicKey & 0xffff);
-    writeU32LE(io, vc.voiceFlags);
-    writeU16LE(io, pcm.ch & 0xffff);
-    writeU16LE(io, pcm.bps & 0xffff);
-    writeU32LE(io, pcm.sps);
+    ioPutUint32LE(io, size);
+    ioPutU16LE(io, 0); // x3x_unit_no
+    ioPutU16LE(io, vc.basicKey & 0xffff);
+    ioPutUint32LE(io, vc.voiceFlags);
+    ioPutU16LE(io, pcm.ch & 0xffff);
+    ioPutU16LE(io, pcm.bps & 0xffff);
+    ioPutUint32LE(io, pcm.sps);
     ioPutFloatLE(io, vc.tuning);
-    writeU32LE(io, pcm.bufSize);
+    ioPutUint32LE(io, pcm.bufSize);
     if (!pcm.pBuf) return false;
     io.write(pcm.pBuf, 1, pcm.bufSize);
     return true;
@@ -720,18 +742,18 @@ export class Woice {
   ioMatePtnW(io: MemoryIo): boolean {
     const vc = this._voices[0]!;
     const start = io.position;
-    writeI32LE(io, 0); // size placeholder
-    writeU16LE(io, 0); // x3x_unit_no
-    writeU16LE(io, vc.basicKey & 0xffff);
-    writeU32LE(io, vc.voiceFlags);
+    ioPutInt32LE(io, 0); // size placeholder
+    ioPutU16LE(io, 0); // x3x_unit_no
+    ioPutU16LE(io, vc.basicKey & 0xffff);
+    ioPutUint32LE(io, vc.voiceFlags);
     ioPutFloatLE(io, vc.tuning);
-    writeI32LE(io, 1); // rrr
+    ioPutInt32LE(io, 1); // rrr
     let size = 16;
     if (!vc.ptn.write(io, io.position)) return false;
     size += io.position - (start + 20);
     const end = io.position;
     if (!io.seek(SEEK_CUR, start - end)) return false;
-    writeI32LE(io, size);
+    ioPutInt32LE(io, size);
     return io.seek(SEEK_CUR, end - io.position);
   }
 
@@ -770,20 +792,20 @@ export class Woice {
 
   ioMatePtvW(io: MemoryIo): boolean {
     const start = io.position;
-    writeI32LE(io, 0); // size placeholder
-    writeU16LE(io, 0); // x3x_unit_no
-    writeU16LE(io, 0); // rrr
+    ioPutInt32LE(io, 0); // size placeholder
+    ioPutU16LE(io, 0); // x3x_unit_no
+    ioPutU16LE(io, 0); // rrr
     ioPutFloatLE(io, 0); // x3x_tuning
-    writeI32LE(io, 0); // ptv.size
+    ioPutInt32LE(io, 0); // ptv.size
     const ptvSize = this.ptvWrite(io);
     if (ptvSize < 0) return false;
     const end = io.position;
     if (!io.seek(SEEK_CUR, start - end)) return false;
-    writeI32LE(io, ptvSize + 12);
-    writeU16LE(io, 0);
-    writeU16LE(io, 0);
+    ioPutInt32LE(io, ptvSize + 12);
+    ioPutU16LE(io, 0);
+    ioPutU16LE(io, 0);
     ioPutFloatLE(io, 0);
-    writeI32LE(io, ptvSize);
+    ioPutInt32LE(io, ptvSize);
     return io.seek(SEEK_CUR, end - io.position);
   }
 
@@ -812,59 +834,10 @@ export class Woice {
 
 // ---- helpers ----
 
-function writeAscii8(io: MemoryIo, s: string): boolean {
-  const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
-  return io.write(b, 1, s.length);
-}
-
 function readAscii(io: MemoryIo, n: number): string | null {
-  if (io.remain < n) return null;
-  const b = new Uint8Array(n);
-  if (!io.read(b, 1, n)) return null;
+  const b = ioGetBytes(io, n);
+  if (b === null) return null;
   let s = "";
   for (const c of b) s += String.fromCharCode(c);
   return s;
-}
-
-function stringToBytes(s: string): Uint8Array {
-  const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
-  return b;
-}
-
-function ioPutU8w(io: MemoryIo, v: number): void {
-  const b = new Uint8Array(1);
-  b[0] = v & 0xff;
-  io.write(b, 1, 1);
-}
-
-function writeU32LE(io: MemoryIo, v: number): void {
-  writeI32LE(io, v >>> 0);
-}
-function writeI32LE(io: MemoryIo, v: number): void {
-  const b = new Uint8Array(4);
-  b[0] = v & 0xff;
-  b[1] = (v >>> 8) & 0xff;
-  b[2] = (v >>> 16) & 0xff;
-  b[3] = (v >>> 24) & 0xff;
-  io.write(b, 1, 4);
-}
-function writeU16LE(io: MemoryIo, v: number): void {
-  const b = new Uint8Array(2);
-  b[0] = v & 0xff;
-  b[1] = (v >>> 8) & 0xff;
-  io.write(b, 1, 2);
-}
-
-function floatToIntBits(v: number): number {
-  const dv = new DataView(new ArrayBuffer(4));
-  dv.setFloat32(0, v, true);
-  return dv.getInt32(0, true);
-}
-
-function intBitsToFloat(bits: number): number {
-  const dv = new DataView(new ArrayBuffer(4));
-  dv.setInt32(0, bits, true);
-  return dv.getFloat32(0, true);
 }

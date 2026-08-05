@@ -2,7 +2,7 @@
 // 注: Moo レンダラーは engine.ts で別途移植する（ここでは管理・IOのみ）
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioGetUint16LE, ioPutInt32LE, ioPutU16LE, ioPutU8, ioGetFloatLE, ioGetUint32LE, int32ToFloat } from "./data.js";
+import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioGetUint16LE, ioGetUint32LE, ioPutAsciiString, ioPutInt32LE, ioPutU16LE, ioPutU8, ioGetFloatLE, int32ToFloat } from "./data.js";
 import { PxtnText } from "./text.js";
 import { Master } from "./master.js";
 import { Evelist, type EveRecord } from "./evelist.js";
@@ -995,31 +995,31 @@ export class Service {
     // ビート分解能: tune は 10 (CLOCK_ROUGH) に量子化して書き出す
     const quantizeBits = bTune ? 10 : 1;
     const code = bTune ? CODE_TUNE_V5 : CODE_PROJ_V5;
-    writeAscii(desc, code);
+    ioPutAsciiString(desc, code);
     ioPutU16LE(desc, exeVer);
     ioPutU16LE(desc, 0);
 
-    writeAscii(desc, CODE_MASTERV5);
+    ioPutAsciiString(desc, CODE_MASTERV5);
     if (!this.master.ioWV5(desc, quantizeBits)) return PxtnErr.DESC_W;
 
-    writeAscii(desc, CODE_EVENT_V5);
+    ioPutAsciiString(desc, CODE_EVENT_V5);
     if (!this.evels.ioWrite(desc, quantizeBits)) return PxtnErr.DESC_W;
 
     if (this.text.hasName) {
-      writeAscii(desc, CODE_TEXTNAME);
+      ioPutAsciiString(desc, CODE_TEXTNAME);
       if (!this.text.nameW(desc)) return PxtnErr.DESC_W;
     }
     if (this.text.hasComment) {
-      writeAscii(desc, CODE_TEXTCOMM);
+      ioPutAsciiString(desc, CODE_TEXTCOMM);
       if (!this.text.commentW(desc)) return PxtnErr.DESC_W;
     }
 
     for (let d = 0; d < this._delayNum; d++) {
-      writeAscii(desc, CODE_EFFEDELA);
+      ioPutAsciiString(desc, CODE_EFFEDELA);
       if (!this._delays[d]!.write(desc)) return PxtnErr.DESC_W;
     }
     for (let o = 0; o < this._ovdrvNum; o++) {
-      writeAscii(desc, CODE_EFFEOVER);
+      ioPutAsciiString(desc, CODE_EFFEOVER);
       if (!this._ovdrvs[o]!.write(desc)) return PxtnErr.DESC_W;
     }
 
@@ -1027,15 +1027,15 @@ export class Service {
       const woice = this._woices[w]!;
       switch (woice.type) {
         case WoiceType.PCM:
-          writeAscii(desc, CODE_MATEPCM);
+          ioPutAsciiString(desc, CODE_MATEPCM);
           if (!woice.ioMatePcmW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.PTV:
-          writeAscii(desc, CODE_MATEPTV);
+          ioPutAsciiString(desc, CODE_MATEPTV);
           if (!woice.ioMatePtvW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.PTN:
-          writeAscii(desc, CODE_MATEPTN);
+          ioPutAsciiString(desc, CODE_MATEPTN);
           if (!woice.ioMatePtnW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.OGGV:
@@ -1044,22 +1044,22 @@ export class Service {
           return PxtnErr.INV_DATA;
       }
       if (!bTune && woice.isNameBuf()) {
-        writeAscii(desc, CODE_ASSIWOIC);
+        ioPutAsciiString(desc, CODE_ASSIWOIC);
         if (!this._ioAssiWoiceW(desc, w)) return PxtnErr.DESC_W;
       }
     }
 
-    writeAscii(desc, CODE_NUM_UNIT);
+    ioPutAsciiString(desc, CODE_NUM_UNIT);
     if (!this._ioUnitNumW(desc)) return PxtnErr.DESC_W;
 
     for (let u = 0; u < this._unitNum; u++) {
       if (!bTune && this._units[u]!.isNameBuf()) {
-        writeAscii(desc, CODE_ASSIUNIT);
+        ioPutAsciiString(desc, CODE_ASSIUNIT);
         if (!this._ioAssiUnitW(desc, u)) return PxtnErr.DESC_W;
       }
     }
 
-    writeAscii(desc, CODE_PXTONEND);
+    ioPutAsciiString(desc, CODE_PXTONEND);
     ioPutInt32LE(desc, 0);
     return PxtnErr.OK;
   }
@@ -1457,10 +1457,4 @@ export function pxtnServiceMooCalcSampleNum(measNum: number, beatNum: number, sp
   if (!beatTempo) return 0;
   const totalBeatNum = measNum * beatNum;
   return Math.trunc((sps * 60 * totalBeatNum) / beatTempo);
-}
-
-function writeAscii(desc: MemoryIo, s: string): void {
-  const b = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
-  desc.write(b, 1, b.length);
 }

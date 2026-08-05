@@ -204,6 +204,22 @@ export function ioGetBytes(io: MemoryIo, n: number): Uint8Array | null {
 export function ioGetAsciiString(io: MemoryIo, n: number): string | null {
   const b = ioGetBytes(io, n);
   if (!b) return null;
+  return asciiBytesToString(b);
+}
+
+// ASCII 文字列 <-> バイト列 (SJIS/UTF-8 エンコードは行わない)
+export function stringToAsciiBytes(s: string): Uint8Array {
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+  return b;
+}
+
+export function ioPutAsciiString(io: MemoryIo, s: string): boolean {
+  return io.write(stringToAsciiBytes(s), 1, s.length);
+}
+
+// NUL 終端の ASCII バイト列を文字列へ (ファイル形式の名前・タグ用)
+export function asciiBytesToString(b: Uint8Array): string {
   let s = "";
   for (const c of b) {
     if (c === 0) break;
