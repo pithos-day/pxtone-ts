@@ -85,9 +85,12 @@ function write4(desc: MemoryIo, buf: Uint8Array): boolean {
   return true;
 }
 
-const sjisDecoder = new TextDecoder("shift_jis");
+// 遅延生成 (AudioWorkletGlobalScope には TextDecoder が存在しないため、
+// 必要な時だけ生成する)
+let sjisDecoder: TextDecoder | null = null;
 
 export function shiftJisToString(buf: Uint8Array): string {
+  if (!sjisDecoder) sjisDecoder = new TextDecoder("shift_jis");
   return sjisDecoder.decode(buf);
 }
 

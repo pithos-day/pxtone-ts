@@ -5,3 +5,6 @@ reference/*.o
 reference/*.out
 *.wav
 web/player.js
+web/player-worklet.js
+web/verify-realtime.js
+web/fixtures/
