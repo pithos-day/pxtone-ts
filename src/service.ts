@@ -445,30 +445,12 @@ export class Service {
     return this._woices[idx]!.toneReady(this._ptnBldr, this._dstSps);
   }
   woiceRemove(idx: number): boolean {
-    if (!this._bInit) return false;
-    if (idx < 0 || idx >= this._woiceNum) return false;
-    this._woices.splice(idx, 1);
-    this._woices.push(null);
+    if (!this.removeAt(this._woices, idx, this._woiceNum)) return false;
     this._woiceNum--;
     return true;
   }
   woiceReplace(oldPlace: number, newPlace: number): boolean {
-    if (!this._bInit) return false;
-    const pW = this._woices[oldPlace];
-    let maxPlace = this._woiceNum - 1;
-    if (newPlace > maxPlace) newPlace = maxPlace;
-    if (newPlace === oldPlace) return true;
-    if (oldPlace < newPlace) {
-      for (let w = oldPlace; w < newPlace; w++) {
-        if (this._woices[w]) this._woices[w] = this._woices[w + 1] ?? null;
-      }
-    } else {
-      for (let w = oldPlace; w > newPlace; w--) {
-        if (this._woices[w]) this._woices[w] = this._woices[w - 1] ?? null;
-      }
-    }
-    this._woices[newPlace] = pW ?? null;
-    return true;
+    return this.replaceIn(this._woices, oldPlace, newPlace, this._woiceNum);
   }
 
   // Unit
@@ -490,30 +472,12 @@ export class Service {
     return true;
   }
   unitRemove(idx: number): boolean {
-    if (!this._bInit) return false;
-    if (idx < 0 || idx >= this._unitNum) return false;
-    this._units.splice(idx, 1);
-    this._units.push(null);
+    if (!this.removeAt(this._units, idx, this._unitNum)) return false;
     this._unitNum--;
     return true;
   }
   unitReplace(oldPlace: number, newPlace: number): boolean {
-    if (!this._bInit) return false;
-    const pW = this._units[oldPlace];
-    let maxPlace = this._unitNum - 1;
-    if (newPlace > maxPlace) newPlace = maxPlace;
-    if (newPlace === oldPlace) return true;
-    if (oldPlace < newPlace) {
-      for (let w = oldPlace; w < newPlace; w++) {
-        if (this._units[w]) this._units[w] = this._units[w + 1] ?? null;
-      }
-    } else {
-      for (let w = oldPlace; w > newPlace; w--) {
-        if (this._units[w]) this._units[w] = this._units[w - 1] ?? null;
-      }
-    }
-    this._units[newPlace] = pW ?? null;
-    return true;
+    return this.replaceIn(this._units, oldPlace, newPlace, this._unitNum);
   }
   unitSetOperatedAll(b: boolean): boolean {
     if (!this._bInit) return false;
@@ -529,7 +493,37 @@ export class Service {
       if (u === idx) this._units[u]!.setPlayed(true);
       else this._units[u]!.setPlayed(false);
     }
+    // 常に false を返す (C++ 移植時の仕様。boolean 戻り値は互換のためのもの)
     return false;
+  }
+
+  // 固定サイズ配列の再現: 要素を削除して末尾を null で埋める
+  private removeAt<T>(list: (T | null)[], idx: number, num: number): boolean {
+    if (!this._bInit) return false;
+    if (idx < 0 || idx >= num) return false;
+    list.splice(idx, 1);
+    list.push(null);
+    return true;
+  }
+
+  // 要素を oldPlace から newPlace へ移動する (間の要素はシフト)
+  private replaceIn<T>(list: (T | null)[], oldPlace: number, newPlace: number, num: number): boolean {
+    if (!this._bInit) return false;
+    const item = list[oldPlace];
+    let maxPlace = num - 1;
+    if (newPlace > maxPlace) newPlace = maxPlace;
+    if (newPlace === oldPlace) return true;
+    if (oldPlace < newPlace) {
+      for (let w = oldPlace; w < newPlace; w++) {
+        if (list[w]) list[w] = list[w + 1] ?? null;
+      }
+    } else {
+      for (let w = oldPlace; w > newPlace; w--) {
+        if (list[w]) list[w] = list[w - 1] ?? null;
+      }
+    }
+    list[newPlace] = item ?? null;
+    return true;
   }
 
   // Quality
@@ -723,34 +717,31 @@ export class Service {
     return PxtnErr.OK;
   }
 
-  private _ioAssiWoiceR(desc: MemoryIo): PxtnErr {
+  // 名前付きアイテムの読み込み (size=20: u16 index + u16 reserved + 名前)
+  private _ioAssiNameR(desc: MemoryIo, nameBytes: number, indexMax: number, apply: (index: number, name: Uint8Array) => PxtnErr): PxtnErr {
     if (!this._bInit) return PxtnErr.INIT;
     const size = ioGetInt32LE(desc);
     if (size === null) return PxtnErr.DESC_R;
     if (size !== 20) return PxtnErr.FMT_UNKNOWN; // u16 + u16 + 16
-    const woiceIndex = ioGetU16LE(desc);
+    const index = ioGetU16LE(desc);
     const reserved = ioGetU16LE(desc);
-    const name = ioGetBytes(desc, PXTN_MAX_TUNEWOICENAME);
-    if (woiceIndex === null || reserved === null || name === null) return PxtnErr.DESC_R;
+    const name = ioGetBytes(desc, nameBytes);
+    if (index === null || reserved === null || name === null) return PxtnErr.DESC_R;
     if (reserved) return PxtnErr.FMT_UNKNOWN;
-    if (woiceIndex >= this._woiceNum) return PxtnErr.FMT_UNKNOWN;
-    if (!this._woices[woiceIndex]!.setNameBuf(name, PXTN_MAX_TUNEWOICENAME)) return PxtnErr.FATAL;
-    return PxtnErr.OK;
+    if (index >= indexMax) return PxtnErr.FMT_UNKNOWN;
+    return apply(index, name);
+  }
+
+  private _ioAssiWoiceR(desc: MemoryIo): PxtnErr {
+    return this._ioAssiNameR(desc, PXTN_MAX_TUNEWOICENAME, this._woiceNum, (index, name) =>
+      this._woices[index]!.setNameBuf(name, PXTN_MAX_TUNEWOICENAME) ? PxtnErr.OK : PxtnErr.FATAL,
+    );
   }
 
   private _ioAssiUnitR(desc: MemoryIo): PxtnErr {
-    if (!this._bInit) return PxtnErr.INIT;
-    const size = ioGetInt32LE(desc);
-    if (size === null) return PxtnErr.DESC_R;
-    if (size !== 20) return PxtnErr.FMT_UNKNOWN; // u16 + u16 + 16
-    const unitIndex = ioGetU16LE(desc);
-    const reserved = ioGetU16LE(desc);
-    const name = ioGetBytes(desc, PXTN_MAX_TUNE_UNIT_NAME);
-    if (unitIndex === null || reserved === null || name === null) return PxtnErr.DESC_R;
-    if (reserved) return PxtnErr.FMT_UNKNOWN;
-    if (unitIndex >= this._unitNum) return PxtnErr.FMT_UNKNOWN;
-    if (!this._units[unitIndex]!.setNameBuf(name)) return PxtnErr.FATAL;
-    return PxtnErr.OK;
+    return this._ioAssiNameR(desc, PXTN_MAX_TUNE_UNIT_NAME, this._unitNum, (index, name) =>
+      this._units[index]!.setNameBuf(name) ? PxtnErr.OK : PxtnErr.FATAL,
+    );
   }
 
   private _ioUnitNumR(desc: MemoryIo, pNum: { value: number }): PxtnErr {
@@ -1064,29 +1055,25 @@ export class Service {
     return PxtnErr.OK;
   }
 
-  private _ioAssiWoiceW(desc: MemoryIo, idx: number): boolean {
+  // 名前付きアイテムの書き込み (size=20: u16 index + u16 reserved + 名前)
+  private _ioAssiNameW(desc: MemoryIo, idx: number, nameLen: number, byteAt: (i: number) => number): boolean {
     if (!this._bInit) return false;
-    const name = this._woices[idx]!.getNameBuf();
-    if (this._woices[idx]!.nameSize > PXTN_MAX_TUNEWOICENAME) return false;
     ioPutInt32LE(desc, 20);
     ioPutU16LE(desc, idx);
     ioPutU16LE(desc, 0);
-    for (let i = 0; i < PXTN_MAX_TUNEWOICENAME; i++) {
-      ioPutU8(desc, i < name.length ? name[i]! : 0);
-    }
+    for (let i = 0; i < nameLen; i++) ioPutU8(desc, byteAt(i));
     return true;
   }
 
+  private _ioAssiWoiceW(desc: MemoryIo, idx: number): boolean {
+    if (this._woices[idx]!.nameSize > PXTN_MAX_TUNEWOICENAME) return false;
+    const name = this._woices[idx]!.getNameBuf();
+    return this._ioAssiNameW(desc, idx, PXTN_MAX_TUNEWOICENAME, (i) => (i < name.length ? name[i]! : 0));
+  }
+
   private _ioAssiUnitW(desc: MemoryIo, idx: number): boolean {
-    if (!this._bInit) return false;
     const name = this._units[idx]!.name;
-    ioPutInt32LE(desc, 20);
-    ioPutU16LE(desc, idx);
-    ioPutU16LE(desc, 0);
-    for (let i = 0; i < PXTN_MAX_TUNE_UNIT_NAME; i++) {
-      ioPutU8(desc, i < name.length ? name.charCodeAt(i) : 0);
-    }
-    return true;
+    return this._ioAssiNameW(desc, idx, PXTN_MAX_TUNE_UNIT_NAME, (i) => (i < name.length ? name.charCodeAt(i) : 0));
   }
 
   private _ioUnitNumW(desc: MemoryIo): boolean {
