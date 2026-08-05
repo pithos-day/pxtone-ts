@@ -126,16 +126,22 @@ export function ioGetU16LE(io: MemoryIo): number | null {
   if (!io.read(scratch2, 1, 2)) return null;
   return scratch2[0]! | (scratch2[1]! << 8);
 }
+export const ioGetUint16LE = ioGetU16LE;
 
 export function ioPutU16LE(io: MemoryIo, v: number): void {
   scratch2[0] = v & 0xff;
   scratch2[1] = (v >>> 8) & 0xff;
   io.write(scratch2, 1, 2);
 }
+export const ioPutUint16LE = ioPutU16LE;
 
 export function ioGetInt16LE(io: MemoryIo): number | null {
   const v = ioGetU16LE(io);
   return v === null ? null : (v << 16) >> 16;
+}
+
+export function ioPutInt16LE(io: MemoryIo, v: number): void {
+  ioPutU16LE(io, v);
 }
 
 export function ioGetInt32LE(io: MemoryIo): number | null {
@@ -146,6 +152,31 @@ export function ioGetInt32LE(io: MemoryIo): number | null {
 export function ioPutInt32LE(io: MemoryIo, v: number): void {
   writeI32LE(scratch4, v);
   io.write(scratch4, 1, 4);
+}
+
+export function ioPutUint32LE(io: MemoryIo, v: number): void {
+  ioPutInt32LE(io, v >>> 0);
+}
+
+export function ioPutInt8(io: MemoryIo, v: number): void {
+  ioPutU8(io, (v << 24) >> 24);
+}
+
+// float32 のビット列を int32 として扱う（C++ の memcpy 相当）
+export function floatToInt32Bits(v: number): number {
+  const dv = new DataView(asInt8Array(4).buffer);
+  dv.setFloat32(0, v, true);
+  return dv.getInt32(0, true);
+}
+
+export function int32ToFloat(bits: number): number {
+  const dv = new DataView(asInt8Array(4).buffer);
+  dv.setInt32(0, bits, true);
+  return dv.getFloat32(0, true);
+}
+
+function asInt8Array(n: number): Int8Array {
+  return new Int8Array(n);
 }
 
 export function ioGetUint32LE(io: MemoryIo): number | null {
