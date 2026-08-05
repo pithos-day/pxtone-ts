@@ -4,6 +4,7 @@ import { Pcm } from "./pcm.js";
 import { Noise, WaveType, type NoiseUnit } from "./noise.js";
 import { Frequency } from "./frequency.js";
 import { Oscillator, type PulsePoint } from "./osc.js";
+import { PxtnErr } from "./error.js";
 
 const _BASIC_SPS = 44100.0;
 const _BASIC_FREQUENCY = 100.0;
@@ -64,8 +65,22 @@ function newOsc(): _Oscillator {
   };
 }
 
-function getInt(v: number): number {
+// 0 方向への切り捨て (負値も floor ではなく 0 側へ丸める)
+function truncToZero(v: number): number {
   return v >= 0 ? Math.floor(v) : Math.ceil(v);
+}
+
+// work を [-1, 1] にクランプして int16 サンプル値へ変換する
+function clampAndScale(work: number): number {
+  if (work > 1.0) work = 1.0;
+  if (work < -1.0) work = -1.0;
+  return Math.trunc(work * _SAMPLING_TOP);
+}
+
+// ランダム系オシレータの現在値 (Saw: ランダム補間 / Rect: 区間先頭の値)
+function sampleRandom(osc: _Oscillator): number {
+  if (osc.ranType === _RandomType.Saw) return osc.rdmStart + (osc.rdmMargin * truncToZero(osc.offset)) / _smp_num;
+  return osc.rdmStart;
 }
 
 function setOscillator(
@@ -153,12 +168,7 @@ export class NoiseBuilder {
     osci.readyGetSample([{ x: 1, y: 128 }], 1, 128, _smp_num, 0);
     {
       const p = tbls[WaveType.Sine]!;
-      for (let s = 0; s < _smp_num; s++) {
-        let work = osci.getOneSampleOvertone(s);
-        if (work > 1.0) work = 1.0;
-        if (work < -1.0) work = -1.0;
-        p[s] = Math.trunc(work * _SAMPLING_TOP);
-      }
+      for (let s = 0; s < _smp_num; s++) p[s] = clampAndScale(osci.getOneSampleOvertone(s));
     }
     // saw down
     {
@@ -187,12 +197,7 @@ export class NoiseBuilder {
       for (let i = 1; i <= 16; i++) overtones.push({ x: i, y: 128 });
       osci.readyGetSample(overtones, 16, 128, _smp_num, 0);
       const p = tbls[WaveType.Saw2]!;
-      for (let s = 0; s < _smp_num; s++) {
-        let work = osci.getOneSampleOvertone(s);
-        if (work > 1.0) work = 1.0;
-        if (work < -1.0) work = -1.0;
-        p[s] = Math.trunc(work * _SAMPLING_TOP);
-      }
+      for (let s = 0; s < _smp_num; s++) p[s] = clampAndScale(osci.getOneSampleOvertone(s));
     }
     // rect2
     {
@@ -200,12 +205,7 @@ export class NoiseBuilder {
       for (let i = 1; i <= 15; i += 2) overtones.push({ x: i, y: 128 });
       osci.readyGetSample(overtones, 8, 128, _smp_num, 0);
       const p = tbls[WaveType.Rect2]!;
-      for (let s = 0; s < _smp_num; s++) {
-        let work = osci.getOneSampleOvertone(s);
-        if (work > 1.0) work = 1.0;
-        if (work < -1.0) work = -1.0;
-        p[s] = Math.trunc(work * _SAMPLING_TOP);
-      }
+      for (let s = 0; s < _smp_num; s++) p[s] = clampAndScale(osci.getOneSampleOvertone(s));
     }
     // tri
     {
@@ -217,16 +217,16 @@ export class NoiseBuilder {
       ];
       osci.readyGetSample(coodi, 4, 128, _smp_num, _smp_num);
       const p = tbls[WaveType.Tri]!;
-      for (let s = 0; s < _smp_num; s++) {
-        let work = osci.getOneSampleCoodinate(s);
-        if (work > 1.0) work = 1.0;
-        if (work < -1.0) work = -1.0;
-        p[s] = Math.trunc(work * _SAMPLING_TOP);
-      }
+      for (let s = 0; s < _smp_num; s++) p[s] = clampAndScale(osci.getOneSampleCoodinate(s));
     }
     // rect 3/4/8/16
-    for (const n of [3, 4, 8, 16] as const) {
-      const wave = n === 3 ? WaveType.Rect3 : n === 4 ? WaveType.Rect4 : n === 8 ? WaveType.Rect8 : WaveType.Rect16;
+    const RECT_WAVES: [number, WaveType][] = [
+      [3, WaveType.Rect3],
+      [4, WaveType.Rect4],
+      [8, WaveType.Rect8],
+      [16, WaveType.Rect16],
+    ];
+    for (const [n, wave] of RECT_WAVES) {
       const p = tbls[wave]!;
       let s = 0;
       for (; s < _smp_num / n; s++) p[s] = _SAMPLING_TOP;
@@ -288,77 +288,54 @@ export class NoiseBuilder {
         freq: newOsc(),
         volu: newOsc(),
       };
-      if (du.pan === 0) {
-        pU.pan[0] = 1;
-        pU.pan[1] = 1;
-      } else if (du.pan < 0) {
-        pU.pan[0] = 1;
-        pU.pan[1] = (100 + du.pan) / 100;
-      } else {
-        pU.pan[1] = 1;
-        pU.pan[0] = (100 - du.pan) / 100;
-      }
+      // pan はパーセント値 (-100..100)。負で左、正で右チャンネルを減衰
+      if (du.pan < 0) pU.pan[1] = (100 + du.pan) / 100;
+      else if (du.pan > 0) pU.pan[0] = (100 - du.pan) / 100;
       for (let e = 0; e < du.enveNum; e++) {
         pU.enves.push({
           smp: Math.trunc((sps * du.enves[e]!.x) / 1000),
           mag: du.enves[e]!.y / 100,
         });
       }
-      while (pU.enveIndex < pU.enveNum) {
-        pU.enveMagMargin = pU.enves[pU.enveIndex]!.mag - pU.enveMagStart;
-        if (pU.enves[pU.enveIndex]!.smp) break;
-        pU.enveMagStart = pU.enves[pU.enveIndex]!.mag;
-        pU.enveIndex++;
-      }
+      this._skipZeroSmpEnvelope(pU);
       setOscillator(pU.main, du.main, sps, this._tables[du.main.type]!, this._tables[WaveType.Random]!);
       setOscillator(pU.freq, du.freq, sps, this._tables[du.freq.type]!, this._tables[WaveType.Random]!);
       setOscillator(pU.volu, du.volu, sps, this._tables[du.volu.type]!, this._tables[WaveType.Random]!);
       units.push(pU);
     }
 
-    const smpNum = Math.trunc(pNoise.smpNum44k / (44100.0 / sps));
+    const smpNum = Math.trunc(pNoise.smpNum44k / (_BASIC_SPS / sps));
 
     const pcm = new Pcm();
-    if (pcm.create(ch, sps, bps, smpNum) !== 0) return null;
+    if (pcm.create(ch, sps, bps, smpNum) !== PxtnErr.OK) return null;
     const p = pcm.pBuf!;
     const p16 = bps === 16 ? new Int16Array(p.buffer, p.byteOffset, p.byteLength >> 1) : null;
 
-    let pos = 0;
     for (let s = 0; s < smpNum; s++) {
       for (let c = 0; c < ch; c++) {
         let store = 0;
         for (let u = 0; u < unitNum; u++) {
           const pU = units[u]!;
           if (!pU.bEnable) continue;
-          let po: _Oscillator;
           let work: number;
           // main
-          po = pU.main;
+          const po = pU.main;
           if (po.ranType === _RandomType.None) {
-            const offset = getInt(po.offset);
+            const offset = truncToZero(po.offset);
             work = offset >= 0 ? po.pSmp![offset]! : 0;
-          } else if (po.ranType === _RandomType.Saw) {
-            work = po.offset >= 0 ? po.rdmStart + (po.rdmMargin * getInt(po.offset)) / _smp_num : 0;
           } else {
-            work = po.offset >= 0 ? po.rdmStart : 0;
+            work = po.offset >= 0 ? sampleRandom(po) : 0;
           }
           if (po.bReverse) work *= -1;
           work *= po.volume;
           // volu
-          let vol: number;
-          po = pU.volu;
-          if (po.ranType === _RandomType.None) {
-            const offset = getInt(po.offset);
-            vol = po.pSmp![offset]!;
-          } else if (po.ranType === _RandomType.Saw) {
-            vol = po.rdmStart + (po.rdmMargin * getInt(po.offset)) / _smp_num;
-          } else {
-            vol = po.rdmStart;
-          }
-          if (po.bReverse) vol *= -1;
-          vol *= po.volume;
+          const volOsc = pU.volu;
+          const vol = volOsc.ranType === _RandomType.None ? volOsc.pSmp![truncToZero(volOsc.offset)]! : sampleRandom(volOsc);
+          let volSample = vol;
+          if (volOsc.bReverse) volSample *= -1;
+          volSample *= volOsc.volume;
 
-          work = (work * (vol + _SAMPLING_TOP)) / (_SAMPLING_TOP * 2);
+          work = (work * (volSample + _SAMPLING_TOP)) / (_SAMPLING_TOP * 2);
           work = work * pU.pan[c]!;
 
           if (pU.enveIndex < pU.enveNum)
@@ -369,32 +346,23 @@ export class NoiseBuilder {
         let sample = Math.trunc(store);
         if (sample > _SAMPLING_TOP) sample = _SAMPLING_TOP;
         if (sample < -_SAMPLING_TOP) sample = -_SAMPLING_TOP;
-        if (bps === 8) {
-          p[pos] = (sample >> 8) + 128;
-          pos += 1;
-        } else {
-          p16![s * ch + c] = sample;
-        }
+        if (bps === 8) p[s * ch + c] = (sample >> 8) + 128;
+        else p16![s * ch + c] = sample;
       }
 
       // increment
       for (let u = 0; u < unitNum; u++) {
         const pU = units[u]!;
         if (!pU.bEnable) continue;
-        let po = pU.freq;
-        let fre: number;
-        if (po.ranType === _RandomType.None) {
-          const offset = getInt(po.offset);
-          fre = (_KEY_TOP * po.pSmp![offset]!) / _SAMPLING_TOP;
-        } else if (po.ranType === _RandomType.Saw) {
-          fre = po.rdmStart + (po.rdmMargin * getInt(po.offset)) / _smp_num;
-        } else {
-          fre = po.rdmStart;
-        }
-        if (po.bReverse) fre *= -1;
-        fre *= po.volume;
+        const freqOsc = pU.freq;
+        const fre = freqOsc.ranType === _RandomType.None
+          ? (_KEY_TOP * freqOsc.pSmp![truncToZero(freqOsc.offset)]!) / _SAMPLING_TOP
+          : sampleRandom(freqOsc);
+        let freqSample = fre;
+        if (freqOsc.bReverse) freqSample *= -1;
+        freqSample *= freqOsc.volume;
 
-        this._increment(pU.main, pU.main.increment * this._freq!.get(getInt(fre)), this._tables[WaveType.Random]!);
+        this._increment(pU.main, pU.main.increment * this._freq!.get(truncToZero(freqSample)), this._tables[WaveType.Random]!);
         this._increment(pU.freq, pU.freq.increment, this._tables[WaveType.Random]!);
         this._increment(pU.volu, pU.volu.increment, this._tables[WaveType.Random]!);
 
@@ -405,18 +373,22 @@ export class NoiseBuilder {
             pU.enveMagStart = pU.enves[pU.enveIndex]!.mag;
             pU.enveMagMargin = 0;
             pU.enveIndex++;
-            while (pU.enveIndex < pU.enveNum) {
-              pU.enveMagMargin = pU.enves[pU.enveIndex]!.mag - pU.enveMagStart;
-              if (pU.enves[pU.enveIndex]!.smp) break;
-              pU.enveMagStart = pU.enves[pU.enveIndex]!.mag;
-              pU.enveIndex++;
-            }
+            this._skipZeroSmpEnvelope(pU);
           }
         }
       }
     }
-    void pos;
     return pcm;
+  }
+
+  // smp=0 のエンベロープ点は読み飛ばす (終端に達した点の値だけを引き継ぐ)
+  private _skipZeroSmpEnvelope(pU: _Unit): void {
+    while (pU.enveIndex < pU.enveNum) {
+      pU.enveMagMargin = pU.enves[pU.enveIndex]!.mag - pU.enveMagStart;
+      if (pU.enves[pU.enveIndex]!.smp) break;
+      pU.enveMagStart = pU.enves[pU.enveIndex]!.mag;
+      pU.enveIndex++;
+    }
   }
 
   private _increment(osc: _Oscillator, incr: number, randTable: Int16Array): void {
