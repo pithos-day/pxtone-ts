@@ -98,7 +98,19 @@ export class Master {
     return this._beat_num * this._beat_clock * meas + this._beat_clock * beat + clock;
   }
 
+  // クロック位置を小節数へ変換して設定する。ビート情報が無効 (0) なら 0 にする
+  private setMeasFromClock(repeatClock: number, lastClock: number): void {
+    if (this._beat_num > 0 && this._beat_clock > 0) {
+      this.setRepeatMeas(Math.trunc(repeatClock / (this._beat_num * this._beat_clock)));
+      this.setLastMeas(Math.trunc(lastClock / (this._beat_num * this._beat_clock)));
+    } else {
+      this.setRepeatMeas(0);
+      this.setLastMeas(0);
+    }
+  }
+
   adjustMeasNum(clock: number): void {
+    // clock を「次の小節境界」に切り上げて、末尾の小節数を確定する
     const bNum = Math.trunc((clock + this._beat_clock - 1) / this._beat_clock);
     const mNum = Math.trunc((bNum + this._beat_num - 1) / this._beat_num);
     if (this._meas_num <= mNum) this._meas_num = mNum;
@@ -136,14 +148,7 @@ export class Master {
     this._beat_clock = beatClock;
     this._beat_num = beatNum;
     this._beat_tempo = beatTempo;
-
-    if (beatNum * beatClock) {
-      this.setRepeatMeas(Math.trunc(clockRepeat / (beatNum * beatClock)));
-      this.setLastMeas(Math.trunc(clockLast / (beatNum * beatClock)));
-    } else {
-      this.setRepeatMeas(0);
-      this.setLastMeas(0);
-    }
+    this.setMeasFromClock(clockRepeat, clockLast);
 
     return PxtnErr.OK;
   }
@@ -214,14 +219,7 @@ export class Master {
     this._beat_num = beatNum;
     this._beat_tempo = beatTempo;
     this._beat_clock = beatClock;
-
-    if (beatNum * beatClock) {
-      this.setRepeatMeas(Math.trunc(repeatClock / (beatNum * beatClock)));
-      this.setLastMeas(Math.trunc(lastClock / (beatNum * beatClock)));
-    } else {
-      this.setRepeatMeas(0);
-      this.setLastMeas(0);
-    }
+    this.setMeasFromClock(repeatClock, lastClock);
 
     return PxtnErr.OK;
   }

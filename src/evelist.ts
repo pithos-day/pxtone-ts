@@ -120,30 +120,23 @@ export class Evelist {
   }
 
   countByValue(kind: number, value: number): number {
-    if (this._eves.length === 0) return 0;
-    let n = 0;
-    for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-      const e = this._eves[p]!;
-      if (e.kind === kind && e.value === value) n++;
-    }
-    return n;
+    return this.countBy((e) => e.kind === kind && e.value === value);
   }
 
   countByUnit(unitNo: number): number {
-    if (this._eves.length === 0) return 0;
-    let n = 0;
-    for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-      if (this._eves[p]!.unitNo === unitNo) n++;
-    }
-    return n;
+    return this.countBy((e) => e.unitNo === unitNo);
   }
 
   countByUnitKind(unitNo: number, kind: number): number {
+    return this.countBy((e) => e.unitNo === unitNo && e.kind === kind);
+  }
+
+  // 条件に一致するレコードを数える
+  private countBy(pred: (e: EveRecord) => boolean): number {
     if (this._eves.length === 0) return 0;
     let n = 0;
     for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-      const e = this._eves[p]!;
-      if (e.unitNo === unitNo && e.kind === kind) n++;
+      if (pred(this._eves[p]!)) n++;
     }
     return n;
   }
@@ -307,36 +300,23 @@ export class Evelist {
   }
 
   recordDelete(clock1: number, clock2: number, unitNo: number, kind: number): number {
-    if (this._eves.length === 0) return 0;
-    let count = 0;
-    for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-      const e = this._eves[p]!;
-      if (e.clock !== clock1 && e.clock >= clock2) break;
-      if (e.clock >= clock1 && e.unitNo === unitNo && e.kind === kind) {
-        this.recCut(p);
-        count++;
-      }
-    }
-    if (eventKindIsTail(kind)) {
-      for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (e.clock >= clock1) break;
-        if (e.unitNo === unitNo && e.kind === kind && e.clock + e.value > clock1) {
-          e.value = clock1 - e.clock;
-          count++;
-        }
-      }
-    }
-    return count;
+    return this.deleteInRange(clock1, clock2, unitNo, (k) => k === kind);
   }
 
   recordDeleteByUnit(clock1: number, clock2: number, unitNo: number): number {
+    return this.deleteInRange(clock1, clock2, unitNo, () => true);
+  }
+
+  // [clock1, clock2) の範囲から条件に一致するレコードを削除する。
+  // clock1 より前にある tail イベントは clock1 で切り詰める。
+  private deleteInRange(clock1: number, clock2: number, unitNo: number, matchKind: (kind: number) => boolean): number {
     if (this._eves.length === 0) return 0;
     let count = 0;
     for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
       const e = this._eves[p]!;
+      // clock1 と同時刻のイベントは clock2 を過ぎていても範囲内に含める
       if (e.clock !== clock1 && e.clock >= clock2) break;
-      if (e.clock >= clock1 && e.unitNo === unitNo) {
+      if (e.clock >= clock1 && e.unitNo === unitNo && matchKind(e.kind)) {
         this.recCut(p);
         count++;
       }
@@ -344,7 +324,7 @@ export class Evelist {
     for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
       const e = this._eves[p]!;
       if (e.clock >= clock1) break;
-      if (e.unitNo === unitNo && eventKindIsTail(e.kind) && e.clock + e.value > clock1) {
+      if (e.unitNo === unitNo && matchKind(e.kind) && eventKindIsTail(e.kind) && e.clock + e.value > clock1) {
         e.value = clock1 - e.clock;
         count++;
       }
@@ -379,33 +359,7 @@ export class Evelist {
   }
 
   recordUnitNoReplace(oldU: number, newU: number): number {
-    if (this._eves.length === 0) return 0;
-    let count = 0;
-    if (oldU === newU) return 0;
-    if (oldU < newU) {
-      for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (e.unitNo === oldU) {
-          e.unitNo = newU;
-          count++;
-        } else if (e.unitNo > oldU && e.unitNo <= newU) {
-          e.unitNo--;
-          count++;
-        }
-      }
-    } else {
-      for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (e.unitNo === oldU) {
-          e.unitNo = newU;
-          count++;
-        } else if (e.unitNo < oldU && e.unitNo >= newU) {
-          e.unitNo++;
-          count++;
-        }
-      }
-    }
-    return count;
+    return this.replaceShifting(() => true, (e) => e.unitNo, (e, v) => (e.unitNo = v), oldU, newU);
   }
 
   recordValueSet(clock1: number, clock2: number, unitNo: number, kind: number, value: number): number {
@@ -495,34 +449,32 @@ export class Evelist {
   }
 
   recordValueReplace(kind: number, oldValue: number, newValue: number): number {
+    return this.replaceShifting((k) => k === kind, (e) => e.value, (e, v) => (e.value = v), oldValue, newValue);
+  }
+
+  // 値 oldValue を newValue に置換し、両者の間にある値は oldValue の方向へ 1 ずつシフトする。
+  // (例: 値 2→4 の置換は、3 と 4 を 2 と 3 へ繰り下げる)
+  private replaceShifting(
+    matchKind: (kind: number) => boolean,
+    get: (e: EveRecord) => number,
+    set: (e: EveRecord, v: number) => void,
+    oldValue: number,
+    newValue: number,
+  ): number {
     if (this._eves.length === 0) return 0;
-    let count = 0;
     if (oldValue === newValue) return 0;
-    if (oldValue < newValue) {
-      for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (e.kind === kind) {
-          if (e.value === oldValue) {
-            e.value = newValue;
-            count++;
-          } else if (e.value > oldValue && e.value <= newValue) {
-            e.value--;
-            count++;
-          }
-        }
-      }
-    } else {
-      for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (e.kind === kind) {
-          if (e.value === oldValue) {
-            e.value = newValue;
-            count++;
-          } else if (e.value < oldValue && e.value >= newValue) {
-            e.value++;
-            count++;
-          }
-        }
+    let count = 0;
+    const shift = oldValue < newValue ? -1 : 1;
+    for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
+      const e = this._eves[p]!;
+      if (!matchKind(e.kind)) continue;
+      const v = get(e);
+      if (v === oldValue) {
+        set(e, newValue);
+        count++;
+      } else if (shift < 0 ? v > oldValue && v <= newValue : v < oldValue && v >= newValue) {
+        set(e, v + shift);
+        count++;
       }
     }
     return count;

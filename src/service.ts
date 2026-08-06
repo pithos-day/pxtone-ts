@@ -286,7 +286,6 @@ export class Service {
     if (!this._bEdit) this._mooBValidData = false;
     this.text.setNameBuf(new Uint8Array(0));
     this.text.setCommentBuf(new Uint8Array(0));
-    this.evels.clear();
     this._delays.fill(null);
     this._delayNum = 0;
     this._ovdrvs.fill(null);
@@ -577,7 +576,7 @@ export class Service {
   private _preCountEvent(desc: MemoryIo, pCount: { value: number }): PxtnErr {
     if (!this._bInit) return PxtnErr.INIT;
     const fmtVer: { fmt: FmtVer; exeVer: number } = { fmt: FmtVer.Unknown, exeVer: 0 };
-    let res = this._readVersion(desc, fmtVer);
+    const res = this._readVersion(desc, fmtVer);
     if (res !== PxtnErr.OK) return res;
 
     if (fmtVer.fmt === FmtVer.X1x) {
@@ -586,7 +585,6 @@ export class Service {
     }
 
     let count = 0;
-    let c = 0;
     let bEnd = false;
     while (!bEnd) {
       const code = ioGetBytes(desc, PXTN_CODESIZE);
@@ -603,10 +601,7 @@ export class Service {
           break;
         case Tag.X4xEvenUnit: {
           const n = this.evels.ioReadX4xEventNum(desc);
-          if (typeof n !== "number") {
-            res = n;
-            return res;
-          }
+          if (typeof n !== "number") return n;
           count += n;
           break;
         }
@@ -909,12 +904,13 @@ export class Service {
       this._x3xSetVoiceNames();
     }
 
+    // 編集モードでは既存のビートクロック設定を保持する (読み込みでは上書きしない)
     if (this._bEdit && this.master.beatClock !== EVENTDEFAULT_BEATCLOCK) return PxtnErr.DENY_BEATCLOCK;
 
+    // イベントとマスターの最終位置のうち、より後ろまで小節数を伸ばす
     const clock1 = this.evels.maxClock;
     const clock2 = this.master.lastClock;
-    if (clock1 > clock2) this.master.adjustMeasNum(clock1);
-    else this.master.adjustMeasNum(clock2);
+    this.master.adjustMeasNum(Math.max(clock1, clock2));
 
     this._mooBValidData = true;
     return PxtnErr.OK;
@@ -924,7 +920,6 @@ export class Service {
     if (!this._bInit) return false;
     if (this._unitNum > this._woiceNum) return false;
     for (let u = 0; u < this._unitNum; u++) {
-      if (u >= this._woiceNum) return false;
       const changeValue = this._woices[u]!.x3xBasicKey - EVENTDEFAULT_BASICKEY;
       if (!this.evels.countByUnitKind(u, EventKind.KEY)) {
         this.evels.recordAddI(0, u, EventKind.KEY, EVENTDEFAULT_KEY);
