@@ -240,11 +240,11 @@ export class Unit {
       if (this._portamentSamplePos < this._portamentSampleNum) {
         this._portamentSamplePos++;
         this._keyNow = Math.trunc(this._keyStart + (this._keyMargin * this._portamentSamplePos) / this._portamentSampleNum);
-      } else {
-        // ポルタメント終端: 目標キーに到達して確定する
-        this._keyStart += this._keyMargin;
-        this._keyMargin = 0;
+        return this._keyNow;
       }
+      // ポルタメント終端: 目標キーに到達して確定する
+      this._keyStart += this._keyMargin;
+      this._keyMargin = 0;
     }
     this._keyNow = this._keyStart + this._keyMargin;
     return this._keyNow;
