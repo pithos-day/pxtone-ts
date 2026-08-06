@@ -195,30 +195,35 @@ export class Service {
   private _groupNum = PXTN_MAX_TUNE_GROUP_NUM;
 
   // ---- Moo (レンダラー) 状態 ----
+  // * レンダリング設定
   private _mooBValidData = false;
-  private _mooBEndVomit = true;
+  private _mooBEndVomit = true; // レンダリング終了 (サンプルを生成できない状態)
   private _mooBMuteByUnit = false;
   private _mooBLoop = true;
-  private _mooFadeDir = 0;
+  private _mooFadeDir = 0; // フェード方向 (-1: out / 0: なし / 1: in)
   private _mooMasterVol = 1.0;
+  private _mooClockRate = 0; // 1 クロックあたりのサンプル数
+  private _mooSmpStride = 1; // 再生ピッチ (clockRate 基準の倍率)
+  private _mooTop = 0x7fff; // 出力クリップ上限 (int16)
+  // * ビート (マスターテンポ由来)
   private _mooBtClock = 0;
   private _mooBtNum = 0;
-  private _mooFreq: Frequency | null = null;
-  private _mooGroupSmps: Int32Array | null = null;
-  private _mooPEve = -1; // _mooRecords の index
-  private _mooRecords: EveRecord[] = [];
+  private _mooBtTempo = 0;
+  // * フェード状態 (count/max は 8bit 固定小数。mooSetFade 参照)
+  private _mooFadeCount = 0;
+  private _mooFadeMax = 0;
+  // * サンプル位置 (クロック単位は _mooClockRate で換算)
   private _mooSmpCount = 0;
   private _mooSmpStart = 0;
   private _mooSmpEnd = 0;
   private _mooSmpRepeat = 0;
   private _mooSmpSmooth = 0;
-  private _mooClockRate = 0;
-  private _mooFadeCount = 0;
-  private _mooFadeMax = 0;
-  private _mooTop = 0x7fff;
-  private _mooSmpStride = 1;
-  private _mooTimePanIndex = 0;
-  private _mooBtTempo = 0;
+  private _mooTimePanIndex = 0; // パン用リングバッファの書き込み位置
+  // * イベント再生
+  private _mooFreq: Frequency | null = null;
+  private _mooGroupSmps: Int32Array | null = null;
+  private _mooPEve = -1; // 次に処理する _mooRecords の index
+  private _mooRecords: EveRecord[] = [];
 
   get isInit(): boolean {
     return this._bInit;
@@ -336,26 +341,23 @@ export class Service {
   get delayMax(): number {
     return this._bInit ? this._delayMax : 0;
   }
-  delaySet(idx: number, unit: number, freq: number, rate: number, group: number): boolean {
+  delaySet(idx: number, unitNo: number, freq: number, rate: number, groupNo: number): boolean {
     if (!this._bInit) return false;
     if (idx >= this._delayNum) return false;
-    this._delays[idx]!.set(unit, freq, rate, group);
+    this._delays[idx]!.set(unitNo, freq, rate, groupNo);
     return true;
   }
-  delayAdd(unit: number, freq: number, rate: number, group: number): boolean {
+  delayAdd(unitNo: number, freq: number, rate: number, groupNo: number): boolean {
     if (!this._bInit) return false;
     if (this._delayNum >= this._delayMax) return false;
     const d = new Delay();
-    d.set(unit, freq, rate, group);
+    d.set(unitNo, freq, rate, groupNo);
     this._delays[this._delayNum] = d;
     this._delayNum++;
     return true;
   }
   delayRemove(idx: number): boolean {
-    if (!this._bInit) return false;
-    if (idx >= this._delayNum) return false;
-    this._delays.splice(idx, 1);
-    this._delays.push(null);
+    if (!this.removeAt(this._delays, idx, this._delayNum)) return false;
     this._delayNum--;
     return true;
   }
@@ -393,10 +395,7 @@ export class Service {
     return true;
   }
   overdriveRemove(idx: number): boolean {
-    if (!this._bInit) return false;
-    if (idx >= this._ovdrvNum) return false;
-    this._ovdrvs.splice(idx, 1);
-    this._ovdrvs.push(null);
+    if (!this.removeAt(this._ovdrvs, idx, this._ovdrvNum)) return false;
     this._ovdrvNum--;
     return true;
   }
@@ -1240,13 +1239,14 @@ export class Service {
         // リリース中に次のノートが重なる場合、寿命は「このノートの終端+リリース」と「次のONまで」の短い方に制限する
         const lifeUntilRelease = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + voiceInst.envRelease;
         let lifeUntilNextOn: number;
-        const c = eve.clock + eve.value + tone.envReleaseClock;
+        // このノートの終端+リリースを過ぎた位置にある次の ON を探す
+        const releaseEnd = eve.clock + eve.value + tone.envReleaseClock;
         let next: EveRecord | null = null;
         for (let q = this._mooPEve + 1; q < records.length; q++) {
-          const p = records[q]!;
-          if (p.clock > c) break;
-          if (p.unitNo === eve.unitNo && p.kind === EventKind.ON) {
-            next = p;
+          const candidate = records[q]!;
+          if (candidate.clock > releaseEnd) break;
+          if (candidate.unitNo === eve.unitNo && candidate.kind === EventKind.ON) {
+            next = candidate;
             break;
           }
         }
@@ -1381,9 +1381,9 @@ export class Service {
     return out;
   }
 
-  private _mooResetVoiceOn(unit: Unit, w: number): boolean {
+  private _mooResetVoiceOn(unit: Unit, woiceNo: number): boolean {
     if (!this._bInit) return false;
-    const woice = this.woiceGet(w);
+    const woice = this.woiceGet(woiceNo);
     if (!woice) return false;
     unit.setWoice(woice);
     for (let v = 0; v < woice.voiceNum; v++) {

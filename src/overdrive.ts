@@ -62,26 +62,26 @@ export class OverDrive {
   write(desc: MemoryIo): boolean {
     const size = 16;
     ioPutInt32LE(desc, size);
-    ioPutUint16LE(desc, 0); // xxx
+    ioPutUint16LE(desc, 0); // reserved
     ioPutUint16LE(desc, this._group);
     ioPutFloatLE(desc, this._cutF);
     ioPutFloatLE(desc, this._ampF);
-    ioPutFloatLE(desc, 0); // yyy
+    ioPutFloatLE(desc, 0); // reserved
     return true;
   }
 
   read(desc: MemoryIo): PxtnErr {
     const size = ioGetInt32LE(desc);
     if (size === null) return PxtnErr.DESC_R;
-    const xxx = ioGetUint16LE(desc);
+    const reserved1 = ioGetUint16LE(desc);
     const group = ioGetUint16LE(desc);
     const cut = ioGetFloatLE(desc);
     const amp = ioGetFloatLE(desc);
-    const yyy = ioGetFloatLE(desc);
-    if (xxx === null || group === null || cut === null || amp === null || yyy === null) return PxtnErr.DESC_R;
+    const reserved2 = ioGetFloatLE(desc);
+    if (reserved1 === null || group === null || cut === null || amp === null || reserved2 === null) return PxtnErr.DESC_R;
 
-    if (xxx) return PxtnErr.FMT_UNKNOWN;
-    if (yyy) return PxtnErr.FMT_UNKNOWN;
+    if (reserved1) return PxtnErr.FMT_UNKNOWN;
+    if (reserved2) return PxtnErr.FMT_UNKNOWN;
     if (cut > TUNEOVERDRIVE_CUT_MAX || cut < TUNEOVERDRIVE_CUT_MIN) return PxtnErr.FMT_UNKNOWN;
     if (amp > TUNEOVERDRIVE_AMP_MAX || amp < TUNEOVERDRIVE_AMP_MIN) return PxtnErr.FMT_UNKNOWN;
 

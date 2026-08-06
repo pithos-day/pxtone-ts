@@ -274,34 +274,34 @@ export class NoiseBuilder {
     const unitNum = pNoise.unitNum;
     const units: _Unit[] = [];
     for (let u = 0; u < unitNum; u++) {
-      const du = pNoise.getUnit(u)!;
-      const pU: _Unit = {
-        bEnable: du.bEnable,
+      const srcUnit = pNoise.getUnit(u)!;
+      const dstUnit: _Unit = {
+        bEnable: srcUnit.bEnable,
         pan: [1, 1],
         enveIndex: 0,
         enveMagStart: 0,
         enveMagMargin: 0,
         enveCount: 0,
-        enveNum: du.enveNum,
+        enveNum: srcUnit.enveNum,
         enves: [],
         main: newOsc(),
         freq: newOsc(),
         volu: newOsc(),
       };
       // pan はパーセント値 (-100..100)。負で左、正で右チャンネルを減衰
-      if (du.pan < 0) pU.pan[1] = (100 + du.pan) / 100;
-      else if (du.pan > 0) pU.pan[0] = (100 - du.pan) / 100;
-      for (let e = 0; e < du.enveNum; e++) {
-        pU.enves.push({
-          smp: Math.trunc((sps * du.enves[e]!.x) / 1000),
-          mag: du.enves[e]!.y / 100,
+      if (srcUnit.pan < 0) dstUnit.pan[1] = (100 + srcUnit.pan) / 100;
+      else if (srcUnit.pan > 0) dstUnit.pan[0] = (100 - srcUnit.pan) / 100;
+      for (let e = 0; e < srcUnit.enveNum; e++) {
+        dstUnit.enves.push({
+          smp: Math.trunc((sps * srcUnit.enves[e]!.x) / 1000),
+          mag: srcUnit.enves[e]!.y / 100,
         });
       }
-      this._skipZeroSmpEnvelope(pU);
-      setOscillator(pU.main, du.main, sps, this._tables[du.main.type]!, this._tables[WaveType.Random]!);
-      setOscillator(pU.freq, du.freq, sps, this._tables[du.freq.type]!, this._tables[WaveType.Random]!);
-      setOscillator(pU.volu, du.volu, sps, this._tables[du.volu.type]!, this._tables[WaveType.Random]!);
-      units.push(pU);
+      this._skipZeroSmpEnvelope(dstUnit);
+      setOscillator(dstUnit.main, srcUnit.main, sps, this._tables[srcUnit.main.type]!, this._tables[WaveType.Random]!);
+      setOscillator(dstUnit.freq, srcUnit.freq, sps, this._tables[srcUnit.freq.type]!, this._tables[WaveType.Random]!);
+      setOscillator(dstUnit.volu, srcUnit.volu, sps, this._tables[srcUnit.volu.type]!, this._tables[WaveType.Random]!);
+      units.push(dstUnit);
     }
 
     const smpNum = Math.trunc(pNoise.smpNum44k / (_BASIC_SPS / sps));
@@ -315,11 +315,11 @@ export class NoiseBuilder {
       for (let c = 0; c < ch; c++) {
         let store = 0;
         for (let u = 0; u < unitNum; u++) {
-          const pU = units[u]!;
-          if (!pU.bEnable) continue;
+          const dstUnit = units[u]!;
+          if (!dstUnit.bEnable) continue;
           let work: number;
           // main
-          const po = pU.main;
+          const po = dstUnit.main;
           if (po.ranType === _RandomType.None) {
             const offset = truncToZero(po.offset);
             work = offset >= 0 ? po.pSmp![offset]! : 0;
@@ -329,18 +329,18 @@ export class NoiseBuilder {
           if (po.bReverse) work *= -1;
           work *= po.volume;
           // volu
-          const volOsc = pU.volu;
+          const volOsc = dstUnit.volu;
           const vol = volOsc.ranType === _RandomType.None ? volOsc.pSmp![truncToZero(volOsc.offset)]! : sampleRandom(volOsc);
           let volSample = vol;
           if (volOsc.bReverse) volSample *= -1;
           volSample *= volOsc.volume;
 
           work = (work * (volSample + _SAMPLING_TOP)) / (_SAMPLING_TOP * 2);
-          work = work * pU.pan[c]!;
+          work = work * dstUnit.pan[c]!;
 
-          if (pU.enveIndex < pU.enveNum)
-            work *= pU.enveMagStart + (pU.enveMagMargin * pU.enveCount) / pU.enves[pU.enveIndex]!.smp;
-          else work *= pU.enveMagStart;
+          if (dstUnit.enveIndex < dstUnit.enveNum)
+            work *= dstUnit.enveMagStart + (dstUnit.enveMagMargin * dstUnit.enveCount) / dstUnit.enves[dstUnit.enveIndex]!.smp;
+          else work *= dstUnit.enveMagStart;
           store += work;
         }
         let sample = Math.trunc(store);
@@ -352,9 +352,9 @@ export class NoiseBuilder {
 
       // increment
       for (let u = 0; u < unitNum; u++) {
-        const pU = units[u]!;
-        if (!pU.bEnable) continue;
-        const freqOsc = pU.freq;
+        const dstUnit = units[u]!;
+        if (!dstUnit.bEnable) continue;
+        const freqOsc = dstUnit.freq;
         const fre = freqOsc.ranType === _RandomType.None
           ? (_KEY_TOP * freqOsc.pSmp![truncToZero(freqOsc.offset)]!) / _SAMPLING_TOP
           : sampleRandom(freqOsc);
@@ -362,18 +362,18 @@ export class NoiseBuilder {
         if (freqOsc.bReverse) freqSample *= -1;
         freqSample *= freqOsc.volume;
 
-        this._increment(pU.main, pU.main.increment * this._freq!.get(truncToZero(freqSample)), this._tables[WaveType.Random]!);
-        this._increment(pU.freq, pU.freq.increment, this._tables[WaveType.Random]!);
-        this._increment(pU.volu, pU.volu.increment, this._tables[WaveType.Random]!);
+        this._increment(dstUnit.main, dstUnit.main.increment * this._freq!.get(truncToZero(freqSample)), this._tables[WaveType.Random]!);
+        this._increment(dstUnit.freq, dstUnit.freq.increment, this._tables[WaveType.Random]!);
+        this._increment(dstUnit.volu, dstUnit.volu.increment, this._tables[WaveType.Random]!);
 
-        if (pU.enveIndex < pU.enveNum) {
-          pU.enveCount++;
-          if (pU.enveCount >= pU.enves[pU.enveIndex]!.smp) {
-            pU.enveCount = 0;
-            pU.enveMagStart = pU.enves[pU.enveIndex]!.mag;
-            pU.enveMagMargin = 0;
-            pU.enveIndex++;
-            this._skipZeroSmpEnvelope(pU);
+        if (dstUnit.enveIndex < dstUnit.enveNum) {
+          dstUnit.enveCount++;
+          if (dstUnit.enveCount >= dstUnit.enves[dstUnit.enveIndex]!.smp) {
+            dstUnit.enveCount = 0;
+            dstUnit.enveMagStart = dstUnit.enves[dstUnit.enveIndex]!.mag;
+            dstUnit.enveMagMargin = 0;
+            dstUnit.enveIndex++;
+            this._skipZeroSmpEnvelope(dstUnit);
           }
         }
       }
@@ -382,12 +382,12 @@ export class NoiseBuilder {
   }
 
   // smp=0 のエンベロープ点は読み飛ばす (終端に達した点の値だけを引き継ぐ)
-  private _skipZeroSmpEnvelope(pU: _Unit): void {
-    while (pU.enveIndex < pU.enveNum) {
-      pU.enveMagMargin = pU.enves[pU.enveIndex]!.mag - pU.enveMagStart;
-      if (pU.enves[pU.enveIndex]!.smp) break;
-      pU.enveMagStart = pU.enves[pU.enveIndex]!.mag;
-      pU.enveIndex++;
+  private _skipZeroSmpEnvelope(dstUnit: _Unit): void {
+    while (dstUnit.enveIndex < dstUnit.enveNum) {
+      dstUnit.enveMagMargin = dstUnit.enves[dstUnit.enveIndex]!.mag - dstUnit.enveMagStart;
+      if (dstUnit.enves[dstUnit.enveIndex]!.smp) break;
+      dstUnit.enveMagStart = dstUnit.enves[dstUnit.enveIndex]!.mag;
+      dstUnit.enveIndex++;
     }
   }
 

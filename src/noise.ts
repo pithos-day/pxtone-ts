@@ -118,7 +118,8 @@ export class Noise {
     }
   }
 
-  private writeOscillator(osc: NoiseOscillator, io: MemoryIo, add: number): number | null {
+  // add は現在のシーク位置 (バイト数) を返し、書き込み済みサイズの計算に使う
+  private writeOscillator(osc: NoiseOscillator, io: MemoryIo, seekPos: number): number | null {
     const vals: number[] = [
       osc.type,
       osc.bRev ? 1 : 0,
@@ -128,9 +129,9 @@ export class Noise {
     ];
     for (const v of vals) {
       if (!dataWriteV(io, v)) return null;
-      add += dataCheckVSize(v);
+      seekPos += dataCheckVSize(v);
     }
-    return add;
+    return seekPos;
   }
 
   private readOscillator(osc: NoiseOscillator, io: MemoryIo): PxtnErr {
@@ -162,8 +163,8 @@ export class Noise {
     return flags;
   }
 
+  // pAdd は現在の IO 位置 (絶対バイト数)。省略時は io.position を使用する
   write(io: MemoryIo, pAdd?: number): boolean {
-    // C++ の *p_add は現在の IO 位置（絶対バイト数）に一致すると仮定
     let seek = pAdd ?? io.position;
     if (!ioPutAsciiString(io, NOISE_FILEID)) return false;
     ioPutUint32LE(io, NOISE_VERSION);

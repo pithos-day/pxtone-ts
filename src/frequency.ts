@@ -26,8 +26,8 @@ const _OCT_TABLE: readonly number[] = [
   128, // f  7
 ];
 
-// 2^(1/divi) を17桁で 10進近似
-function getDivideOctaveRate(divi: number): number {
+// 2^(1/divisionsPerOctave) を17桁で 10進近似
+function getDivideOctaveRate(divisionsPerOctave: number): number {
   let approx = 1.0;
   for (let i = 0; i < 17; i++) {
     let step = 1;
@@ -37,11 +37,11 @@ function getDivideOctaveRate(divi: number): number {
       const candidate = approx + step * j;
       let product = 1.0;
       let k = 0;
-      for (; k < divi; k++) {
+      for (; k < divisionsPerOctave; k++) {
         product *= candidate;
         if (product >= 2.0) break;
       }
-      if (k !== divi) break;
+      if (k !== divisionsPerOctave) break;
     }
     approx += step * (j - 1);
   }

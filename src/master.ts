@@ -161,12 +161,12 @@ export class Master {
   ioRX4x(desc: MemoryIo): PxtnErr {
     ioGetInt32LE(desc);
     const dataNum = ioGetUint16LE(desc);
-    const rrr = ioGetUint16LE(desc);
+    const reserved = ioGetUint16LE(desc);
     const eventNum = ioGetUint32LE(desc);
-    if (dataNum === null || rrr === null || eventNum === null) return PxtnErr.DESC_R;
+    if (dataNum === null || reserved === null || eventNum === null) return PxtnErr.DESC_R;
 
     if (dataNum !== 3) return PxtnErr.FMT_UNKNOWN;
-    if (rrr) return PxtnErr.FMT_UNKNOWN;
+    if (reserved) return PxtnErr.FMT_UNKNOWN;
 
     let beatClock = EVENTDEFAULT_BEATCLOCK;
     let beatNum = EVENTDEFAULT_BEATNUM;
@@ -230,17 +230,18 @@ export class Master {
     const size = ioGetUint32LE(desc);
     if (size === null) return 0;
     const dataNum = ioGetUint16LE(desc);
-    const rrr = ioGetUint16LE(desc);
+    const reserved = ioGetUint16LE(desc);
     const eventNum = ioGetUint32LE(desc);
-    if (dataNum === null || rrr === null || eventNum === null) return 0;
+    if (dataNum === null || reserved === null || eventNum === null) return 0;
     if (dataNum !== 3) return 0;
-    void rrr;
+    void reserved;
 
+    // ioRX4x と同じ構造を読み飛ばしてイベント数だけ数える
     for (let e = 0; e < eventNum; e++) {
-      const a = dataReadV(desc);
-      const b = dataReadV(desc);
-      const c = dataReadV(desc);
-      if (a === null || b === null || c === null) return 0;
+      const status = dataReadV(desc);
+      const clock = dataReadV(desc);
+      const volume = dataReadV(desc);
+      if (status === null || clock === null || volume === null) return 0;
     }
     return eventNum;
   }
