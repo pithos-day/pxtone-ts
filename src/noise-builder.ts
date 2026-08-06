@@ -328,7 +328,7 @@ export class NoiseBuilder {
           }
           if (po.bReverse) work *= -1;
           work *= po.volume;
-          // volu
+          // volu (C++ 互換: main と違い offset の負値ガードがない。負 offset 時は undefined になり得る)
           const volOsc = dstUnit.volu;
           const vol = volOsc.ranType === _RandomType.None ? volOsc.pSmp![truncToZero(volOsc.offset)]! : sampleRandom(volOsc);
           let volSample = vol;
@@ -354,6 +354,7 @@ export class NoiseBuilder {
       for (let u = 0; u < unitNum; u++) {
         const dstUnit = units[u]!;
         if (!dstUnit.bEnable) continue;
+        // freq (C++ 互換: main と違い負 offset ガードなし。volu と同じ扱い)
         const freqOsc = dstUnit.freq;
         const fre = freqOsc.ranType === _RandomType.None
           ? (_KEY_TOP * freqOsc.pSmp![truncToZero(freqOsc.offset)]!) / _SAMPLING_TOP

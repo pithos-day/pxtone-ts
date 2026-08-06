@@ -94,8 +94,12 @@ export function shiftJisToString(buf: Uint8Array): string {
   return sjisDecoder.decode(buf);
 }
 
-// SJIS へのエンコード: Web/Node 標準の TextEncoder は UTF-8 のみのため、
-// ここでは UTF-8 を返す。バイト列を編集起点にする限り round-trip 互換は保たれる。
-export function encodeShiftJis(s: string): Uint8Array {
+// 文字列をバイト列へエンコードする。Web/Node 標準の TextEncoder は UTF-8 のみのため、
+// SJIS 互換ではなく UTF-8 バイト列を返す (曲名・コメントのバイト列編集起点として round-trip 互換)。
+// 旧名 encodeShiftJis は互換のための alias。
+export function encodeUtf8(s: string): Uint8Array {
   return new TextEncoder().encode(s);
 }
+
+/** @deprecated encodeUtf8 に改名。SJIS ではなく UTF-8 を返す点に注意 */
+export const encodeShiftJis = encodeUtf8;

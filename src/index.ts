@@ -57,7 +57,7 @@ export {
 } from "./event.js";
 export { Evelist, type EveRecord } from "./evelist.js";
 export { Master } from "./master.js";
-export { PxtnText, shiftJisToString, encodeShiftJis } from "./text.js";
+export { PxtnText, shiftJisToString, encodeUtf8, encodeShiftJis } from "./text.js";
 
 // エフェクト
 export { Delay, DelayUnit } from "./delay.js";

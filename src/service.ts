@@ -14,6 +14,7 @@ import { Unit } from "./unit.js";
 import { NoiseBuilder } from "./noise-builder.js";
 import { Frequency } from "./frequency.js";
 import {
+  CLOCK_ROUGH,
   PXTN_BASIC_SPS,
   PXTN_BITPERSAMPLE,
   PXTN_BUFSIZE_TIMEPAN,
@@ -980,8 +981,8 @@ export class Service {
 
   write(desc: MemoryIo, bTune: boolean, exeVer: number): PxtnErr {
     if (!this._bInit) return PxtnErr.INIT;
-    // ビート分解能: tune は 10 (CLOCK_ROUGH) に量子化して書き出す
-    const quantizeBits = bTune ? 10 : 1;
+    // ビート分解能: tune は CLOCK_ROUGH に量子化して書き出す
+    const quantizeBits = bTune ? CLOCK_ROUGH : 1;
     const code = bTune ? CODE_TUNE_V5 : CODE_PROJ_V5;
     ioPutAsciiString(desc, code);
     ioPutU16LE(desc, exeVer);
