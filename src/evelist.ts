@@ -75,8 +75,8 @@ function makeRecord(): EveRecord {
 export class Evelist {
   private _eves: EveRecord[] = [];
   private _start = -1;
-  private _linear = 0;
-  private _pX4xRec = -1;
+  private _nextSlot = 0; // 線形読み込み時に次へ書き込むスロット index
+  private _pX4xRec = -1; // x4x 読み込みの探索開始位置 (前回挿入したレコード)
 
   release(): void {
     this._eves = [];
@@ -255,54 +255,54 @@ export class Evelist {
   private findInsertPosition(clock: number, unitNo: number, kind: number, searchStart: number): [number, number] {
     let pPrev = -1;
     let pNext = -1;
-
-    if (this._start < 0) {
-      // first
-    } else if (clock < this._eves[this._start]!.clock) {
-      pNext = this._start;
-    } else {
-      let p = searchStart >= 0 ? searchStart : this._start;
-      for (;; p = this._eves[p]!.next) {
-        const e = this._eves[p]!;
-        if (p < 0) break; // 末端（安全策）
-        if (e.clock === clock) {
-          for (;; p = this._eves[p]!.next) {
-            const e2 = this._eves[p]!;
-            if (p < 0) break;
-            if (e2.clock !== clock) {
-              pPrev = e2.prev;
-              pNext = p;
-              break;
+    if (this._start >= 0) {
+      if (clock < this._eves[this._start]!.clock) {
+        pNext = this._start;
+      } else {
+        let p = searchStart >= 0 ? searchStart : this._start;
+        while (p >= 0) {
+          const e = this._eves[p]!;
+          if (e.clock === clock) {
+            // 同時刻のレコード群の中から挿入位置を決める
+            let p2 = p;
+            while (p2 >= 0) {
+              const e2 = this._eves[p2]!;
+              if (e2.clock !== clock) {
+                pPrev = e2.prev;
+                pNext = p2;
+                break;
+              }
+              if (unitNo === e2.unitNo && kind === e2.kind) {
+                // 同じ unitNo/kind の既存イベントは NULL 化して置換する
+                pPrev = e2.prev;
+                pNext = e2.next;
+                e2.kind = EventKind.NULL;
+                break;
+              }
+              if (comparePriority(kind, e2.kind) < 0) {
+                pPrev = e2.prev;
+                pNext = p2;
+                break;
+              }
+              if (e2.next < 0) {
+                pPrev = p2;
+                break;
+              }
+              p2 = e2.next;
             }
-            if (unitNo === e2.unitNo && kind === e2.kind) {
-              // 同じ unitNo/kind の既存イベントは NULL 化して置換する
-              pPrev = e2.prev;
-              pNext = e2.next;
-              e2.kind = EventKind.NULL;
-              break;
-            }
-            if (comparePriority(kind, e2.kind) < 0) {
-              pPrev = e2.prev;
-              pNext = p;
-              break;
-            }
-            if (e2.next < 0) {
-              pPrev = p;
-              break;
-            }
+            break;
+          } else if (e.clock > clock) {
+            pPrev = e.prev;
+            pNext = p;
+            break;
+          } else if (e.next < 0) {
+            pPrev = p;
+            break;
           }
-          break;
-        } else if (e.clock > clock) {
-          pPrev = e.prev;
-          pNext = p;
-          break;
-        } else if (e.next < 0) {
-          pPrev = p;
-          break;
+          p = e.next;
         }
       }
     }
-
     return [pPrev, pNext];
   }
 
@@ -541,30 +541,31 @@ export class Evelist {
       }
       while (p >= 0) {
         if (this._eves[p]!.unitNo === unitNo) {
-          const clock = this._eves[p]!.clock + shift;
+          const shiftedClock = this._eves[p]!.clock + shift;
           const kind = this._eves[p]!.kind;
           const value = this._eves[p]!.value;
           const pNext = this._eves[p]!.next;
           this.recCut(p);
-          if (clock >= 0) this.recordAddI(clock, unitNo, kind, value);
+          if (shiftedClock >= 0) this.recordAddI(shiftedClock, unitNo, kind, value);
           count++;
           p = pNext;
         } else {
           p = this._eves[p]!.next;
         }
       }
-    } else if (shift > 0) {
+    } else {
+      // shift > 0 (先頭の `if (!shift) return 0` で shift === 0 は除外済み)
       let p = this._start;
       while (this._eves[p]!.next >= 0) p = this._eves[p]!.next;
       while (p >= 0) {
         if (this._eves[p]!.clock < clock) break;
         if (this._eves[p]!.unitNo === unitNo) {
-          const c = this._eves[p]!.clock + shift;
-          const k = this._eves[p]!.kind;
-          const v = this._eves[p]!.value;
+          const shiftedClock = this._eves[p]!.clock + shift;
+          const kind = this._eves[p]!.kind;
+          const value = this._eves[p]!.value;
           const pPrev = this._eves[p]!.prev;
           this.recCut(p);
-          this.recordAddI(c, unitNo, k, v);
+          this.recordAddI(shiftedClock, unitNo, kind, value);
           count++;
           p = pPrev;
         } else {
@@ -579,17 +580,17 @@ export class Evelist {
   linearStart(): boolean {
     if (this._eves.length === 0) return false;
     this.clear();
-    this._linear = 0;
+    this._nextSlot = 0;
     return true;
   }
 
   linearAddI(clock: number, unitNo: number, kind: number, value: number): void {
-    const e = this._eves[this._linear]!;
+    const e = this._eves[this._nextSlot]!;
     e.clock = clock;
     e.unitNo = unitNo;
     e.kind = kind;
     e.value = value;
-    this._linear++;
+    this._nextSlot++;
   }
 
   linearAddF(clock: number, unitNo: number, kind: number, valueF: number): void {
@@ -597,9 +598,9 @@ export class Evelist {
     this.linearAddI(clock, unitNo, kind, value);
   }
 
-  linearEnd(bConnect: boolean): void {
+  linearEnd(connect: boolean): void {
     if (this._eves.length > 0 && this._eves[0]!.kind !== EventKind.NULL) this._start = 0;
-    if (bConnect) {
+    if (connect) {
       for (let r = 1; r < this._eves.length; r++) {
         if (this._eves[r]!.kind === EventKind.NULL) break;
         this._eves[r]!.prev = r - 1;
@@ -612,7 +613,7 @@ export class Evelist {
   x4xReadStart(): boolean {
     if (this._eves.length === 0) return false;
     this.clear();
-    this._linear = 0;
+    this._nextSlot = 0;
     this._pX4xRec = -1;
     return true;
   }
@@ -622,7 +623,7 @@ export class Evelist {
   }
 
   x4xReadAdd(clock: number, unitNo: number, kind: number, value: number): void {
-    const pNew = this._linear++;
+    const pNew = this._nextSlot++;
     const [pPrev, pNext] = this.findInsertPosition(clock, unitNo, kind, this._pX4xRec);
     this.recSet(pNew, pPrev, pNext, clock, unitNo, kind, value);
     this._pX4xRec = pNew;
@@ -662,8 +663,9 @@ export class Evelist {
     const size = ioGetInt32LE(desc);
     const eveNum = ioGetInt32LE(desc);
     if (size === null || eveNum === null) return PxtnErr.DESC_R;
+    void size;
 
-    let clock = 0;
+    // 各イベントの clock は前のイベントからの差分で格納されている
     let absolute = 0;
 
     for (let e = 0; e < eveNum; e++) {
@@ -673,8 +675,7 @@ export class Evelist {
       const value = dataReadV(desc);
       if (rv === null || unitNo === null || kind === null || value === null) return PxtnErr.DESC_R;
       absolute += rv;
-      clock = absolute;
-      this.linearAddI(clock, unitNo, kind, value);
+      this.linearAddI(absolute, unitNo, kind, value);
     }
     return PxtnErr.OK;
   }
@@ -733,7 +734,6 @@ export class Evelist {
   }
 
   ioReadX4xEventNum(desc: MemoryIo): PxtnErr | number {
-    if (!desc) return PxtnErr.PARAM;
     const size = ioGetInt32LE(desc);
     if (size === null) return PxtnErr.DESC_R;
     const unitIndex = ioGetU16LE(desc);
