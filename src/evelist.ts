@@ -390,6 +390,7 @@ export class Evelist {
   recordValueChange(clock1: number, clock2: number, unitNo: number, kind: number, value: number): number {
     if (this._eves.length === 0) return 0;
     let count = 0;
+    // イベント種別ごとの値の範囲。ON は長さ (120 クロック)、KEY は音高、その他は音量系 (0x80)
     let max: number;
     let min: number;
     switch (kind) {
@@ -472,7 +473,7 @@ export class Evelist {
       if (v === oldValue) {
         set(e, newValue);
         count++;
-      } else if (shift < 0 ? v > oldValue && v <= newValue : v < oldValue && v >= newValue) {
+      } else if (shift === -1 ? v > oldValue && v <= newValue : v < oldValue && v >= newValue) {
         set(e, v + shift);
         count++;
       }

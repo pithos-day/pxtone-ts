@@ -2,7 +2,7 @@
 // pxtnPulse_Noise.h の pxNOISEDESIGN_* / pxWAVETYPE を含む
 
 import { PxtnErr } from "./error.js";
-import { MemoryIo, SEEK_CUR, dataCheckVSize, dataReadV, dataWriteV, ioGetBytes, ioGetInt8, ioGetUint32LE, ioPutAsciiString, ioPutU8, ioPutUint32LE } from "./data.js";
+import { MemoryIo, SEEK_CUR, dataCheckVSize, dataReadV, dataWriteV, ioGetAsciiExact, ioGetInt8, ioGetUint32LE, ioPutAsciiString, ioPutU8, ioPutUint32LE } from "./data.js";
 import type { PulsePoint } from "./osc.js";
 
 export enum WaveType {
@@ -224,7 +224,7 @@ export class Noise {
 
   read(io: MemoryIo): PxtnErr {
     this.release();
-    const code = readAsciiExact(io, 8);
+    const code = ioGetAsciiExact(io, 8);
     if (code === null) return PxtnErr.DESC_R;
     if (code !== NOISE_FILEID) return PxtnErr.INV_CODE;
     const ver = ioGetUint32LE(io);
@@ -365,10 +365,3 @@ function compareOsci(a: NoiseOscillator, b: NoiseOscillator): number {
   return 0;
 }
 
-function readAsciiExact(io: MemoryIo, n: number): string | null {
-  const b = ioGetBytes(io, n);
-  if (b === null) return null;
-  let s = "";
-  for (const c of b) s += String.fromCharCode(c);
-  return s;
-}

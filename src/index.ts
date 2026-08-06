@@ -129,6 +129,7 @@ export {
   PXTN_PTV_VERSION,
   PXTN_PTN_FILEID,
   PXTN_PTN_VERSION,
+  PXTN_BASIC_SPS,
 } from "./constants.js";
 
 // AudioWorklet プレイヤーのメッセージ型

@@ -106,7 +106,8 @@ export class MemoryIo {
 }
 
 // ---- 型付き読み書き（リトルエンディアン） ----
-// スクラッチ領域を再利用してアロケーションを避ける。
+// スクラッチ領域を再利用して、呼び出し毎のアロケーションを避ける
+// (float 変換のみ DataView を都度確保する)
 
 export function ioGetU8(io: MemoryIo): number | null {
   return io.read(scratch1, 1, 1) ? scratch1[0]! : null;
@@ -168,7 +169,6 @@ export function floatToInt32Bits(v: number): number {
   dv.setFloat32(0, v, true);
   return dv.getInt32(0, true);
 }
-
 export function int32ToFloat(bits: number): number {
   const dv = new DataView(asInt8Array(4).buffer);
   dv.setInt32(0, bits, true);
@@ -205,6 +205,15 @@ export function ioGetAsciiString(io: MemoryIo, n: number): string | null {
   const b = ioGetBytes(io, n);
   if (!b) return null;
   return asciiBytesToString(b);
+}
+
+// NUL 終端を解釈しない ASCII 読み取り (ファイル識別コード等の厳密一致用)
+export function ioGetAsciiExact(io: MemoryIo, n: number): string | null {
+  const b = ioGetBytes(io, n);
+  if (b === null) return null;
+  let s = "";
+  for (const c of b) s += String.fromCharCode(c);
+  return s;
 }
 
 // ASCII 文字列 <-> バイト列 (SJIS/UTF-8 エンコードは行わない)

@@ -62,12 +62,13 @@ export class Delay {
 
   toneReady(beatNum: number, beatTempo: number, sps: number): PxtnErr {
     this.toneRelease();
-    let res = PxtnErr.VOID;
+    let err: PxtnErr | null = null;
 
     if (this._freq && this._rate) {
       this._offset = 0;
       this._rateS32 = Math.trunc(this._rate);
 
+      // Math.fround は C++ の float 精度 (24bit 仮数) を再現するために使う
       switch (this._unit) {
         case DelayUnit.Beat:
           this._smpNum = Math.trunc(Math.fround(Math.fround(sps * 60) / beatTempo) / this._freq);
@@ -88,14 +89,14 @@ export class Delay {
           try {
             this._bufs.push(new Int32Array(this._smpNum));
           } catch {
-            res = PxtnErr.MEMORY;
+            err = PxtnErr.MEMORY;
             break;
           }
         }
       }
-      if (res !== PxtnErr.VOID) {
+      if (err !== null) {
         this.toneRelease();
-        return res;
+        return err;
       }
     }
 

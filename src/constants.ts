@@ -35,6 +35,9 @@ export const PXTN_MAX_TUNEWOICENAME = 16;
 // pxtnWoice.h
 export const PXTN_VOICEUNIT_VOICE_NUM_LIMIT = 4;
 
+// 基準サンプルレート (キャッシュ生成・パン時間換算に使用)
+export const PXTN_BASIC_SPS = 44100;
+
 // PCTN (PTV)
 export const PXTN_PTV_FILEID = "PTVOICE-";
 export const PXTN_PTV_VERSION = 20060111;

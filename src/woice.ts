@@ -17,6 +17,7 @@ import {
   ioGetU8,
   ioGetUint16LE,
   ioGetUint32LE,
+  ioGetAsciiExact,
   ioPutAsciiString,
   ioPutFloatLE,
   ioPutInt32LE,
@@ -29,8 +30,11 @@ import { Pcm } from "./pcm.js";
 import { Noise } from "./noise.js";
 import type { NoiseBuilder } from "./noise-builder.js";
 import { EVENTDEFAULT_BASICKEY, panToVolumes } from "./event.js";
-import { PXTN_MAX_TUNEWOICENAME } from "./constants.js";
+import { PXTN_BASIC_SPS, PXTN_MAX_TUNEWOICENAME } from "./constants.js";
 import { Oscillator, type PulsePoint } from "./osc.js";
+
+// PTV 座標波形のキャッシュ長 (サンプル数)。C++ 実装の固定値に合わせる
+const PTV_CACHE_SAMPLE_NUM = 400;
 
 export enum WoiceType {
   None = 0,
@@ -316,7 +320,7 @@ export class Woice {
 
   toneReadySample(ptnBldr: NoiseBuilder | null): PxtnErr {
     const ch = 2;
-    const sps = 44100;
+    const sps = PXTN_BASIC_SPS;
     const bps = 16;
     for (let v = 0; v < this._voiceNum; v++) {
       const vi = this._voinsts[v]!;
@@ -341,7 +345,8 @@ export class Woice {
         }
         case VoiceType.Overtone:
         case VoiceType.Coodinate: {
-          vi.smpBodyW = 400;
+          // PTV 波形のキャッシュ長は固定 400 サンプル (C++ 実装と同一)
+          vi.smpBodyW = PTV_CACHE_SAMPLE_NUM;
           const size = (vi.smpBodyW * ch * bps) / 8;
           vi.pSmpW = new Uint8Array(size);
           vi.pSmpW.fill(0);
@@ -423,13 +428,12 @@ export class Woice {
     let total = 0;
     if (!ioPutAsciiString(io, PTV_FILEID)) return -1;
     ioPutUint32LE(io, PTV_VERSION);
-    ioPutInt32LE(io, 0);
-    if (!dataWriteV(io, 0)) return -1;
-    total += dataCheckVSize(0);
-    if (!dataWriteV(io, 0)) return -1;
-    total += dataCheckVSize(0);
-    if (!dataWriteV(io, 0)) return -1;
-    total += dataCheckVSize(0);
+    ioPutInt32LE(io, 0); // size placeholder
+    // x3x_basic_key と予約フィールド 2 つ (x3x 形式との互換のため 0 で書く)
+    for (let i = 0; i < 3; i++) {
+      if (!dataWriteV(io, 0)) return -1;
+      total += dataCheckVSize(0);
+    }
     if (!dataWriteV(io, this._voiceNum)) return -1;
     total += dataCheckVSize(this._voiceNum);
     for (let v = 0; v < this._voiceNum; v++) {
@@ -454,6 +458,7 @@ export class Woice {
     if (!io.seek(SEEK_CUR, -(total + 4))) return -1;
     ioPutInt32LE(io, total);
     if (!io.seek(SEEK_CUR, total)) return -1;
+    // 戻り値 = ファイル全体のバイト数 (ヘッダ 16 バイト + データ部)
     return 16 + total;
   }
 
@@ -471,7 +476,7 @@ export class Woice {
           ioPutU8(io, vc.wave.points[i]!.x & 0xff);
           add += 1;
           // y は符号付き (-128..127) のため、int8 に符号拡張してから 8bit として書き出す
-          ioPutU8(io, (vc.wave.points[i]!.y << 24) >> 24 & 0xff);
+          ioPutU8(io, ((vc.wave.points[i]!.y << 24) >> 24) & 0xff);
           add += 1;
         }
         break;
@@ -532,7 +537,7 @@ export class Woice {
 
   ptvRead(io: MemoryIo): PxtnErr {
     let res: PxtnErr = PxtnErr.VOID;
-    const code = readAscii(io, 8);
+    const code = ioGetAsciiExact(io, 8);
     if (code === null) return PxtnErr.DESC_R;
     const version = ioGetInt32LE(io);
     if (version === null) return PxtnErr.DESC_R;
@@ -816,14 +821,4 @@ export class Woice {
     else this._x3xTuning = 0;
     return PxtnErr.OK;
   }
-}
-
-// ---- helpers ----
-
-function readAscii(io: MemoryIo, n: number): string | null {
-  const b = ioGetBytes(io, n);
-  if (b === null) return null;
-  let s = "";
-  for (const c of b) s += String.fromCharCode(c);
-  return s;
 }

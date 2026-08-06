@@ -3,7 +3,7 @@
 import { PxtnErr } from "./error.js";
 import { MemoryIo, asciiBytesToString, ioGetInt32LE, ioGetU16LE, ioGetBytes } from "./data.js";
 import type { Woice, VoiceInstance } from "./woice.js";
-import { PXTN_BUFSIZE_TIMEPAN, PXTN_MAX_CHANNEL, PXTN_MAX_TUNEWOICENAME, PXTN_MAX_UNIT_CONTROL_VOICE } from "./constants.js";
+import { PXTN_BASIC_SPS, PXTN_BUFSIZE_TIMEPAN, PXTN_MAX_CHANNEL, PXTN_MAX_TUNEWOICENAME, PXTN_MAX_UNIT_CONTROL_VOICE } from "./constants.js";
 import {
   EVENTDEFAULT_GROUPNO,
   EVENTDEFAULT_KEY,
@@ -151,15 +151,11 @@ export class Unit {
     this._panTimes[0] = 0;
     this._panTimes[1] = 0;
     if (ch === 2) {
-      if (pan >= 64) {
-        this._panTimes[0] = pan - 64;
-        if (this._panTimes[0]! > 63) this._panTimes[0] = 63;
-        this._panTimes[0] = Math.trunc((this._panTimes[0]! * 44100) / sps);
-      } else {
-        this._panTimes[1] = 64 - pan;
-        if (this._panTimes[1]! > 63) this._panTimes[1] = 63;
-        this._panTimes[1] = Math.trunc((this._panTimes[1]! * 44100) / sps);
-      }
+      // 中央 64 から離れた側へパン時間を振る (最大 63)
+      const target = pan >= 64 ? 0 : 1;
+      const amount = pan >= 64 ? pan - 64 : 64 - pan;
+      const clamped = amount > 63 ? 63 : amount;
+      this._panTimes[target] = Math.trunc((clamped * PXTN_BASIC_SPS) / sps);
     }
   }
 
@@ -185,16 +181,16 @@ export class Unit {
     for (let v = 0; v < num; v++) {
       const vi = this._pWoice.getInstance(v);
       const vt = this._vts[v]!;
-      if (vt.lifeCount > 0 && vi!.envSize) {
-        if (vt.onCount > 0) {
-          if (vt.envPos < vi!.envSize) {
-            vt.envVolume = vi!.pEnv![vt.envPos]!;
-            vt.envPos++;
-          }
-        } else {
-          vt.envVolume = vt.envStart + Math.trunc(((0 - vt.envStart) * vt.envPos) / vi!.envRelease);
-          vt.envPos++;
-        }
+      if (vt.lifeCount <= 0 || !vi!.envSize) continue;
+      if (vt.onCount > 0) {
+        // 発音中: エンベロープテーブルを読み進める
+        if (vt.envPos >= vi!.envSize) continue;
+        vt.envVolume = vi!.pEnv![vt.envPos]!;
+        vt.envPos++;
+      } else {
+        // リリース: 現在値から envRelease サンプルで 0 へ線形に減衰する
+        vt.envVolume = vt.envStart + Math.trunc(((-vt.envStart) * vt.envPos) / vi!.envRelease);
+        vt.envPos++;
       }
     }
   }
@@ -213,6 +209,7 @@ export class Unit {
         const vi = this._pWoice.getInstance(v)!;
         let work = 0;
         if (vt.lifeCount > 0) {
+          // サンプル位置→バイト位置: 1 サンプル = 2ch × 16bit = 4 バイト、ch ごとに 2 バイト
           const pos = Math.trunc(vt.smpPos) * 4 + ch * 2;
           work += i16At(vi.pSmpW!, pos);
           if (chNum === 1) {
@@ -244,13 +241,12 @@ export class Unit {
         this._portamentSamplePos++;
         this._keyNow = Math.trunc(this._keyStart + (this._keyMargin * this._portamentSamplePos) / this._portamentSampleNum);
       } else {
-        this._keyNow = this._keyStart + this._keyMargin;
-        this._keyStart = this._keyNow;
+        // ポルタメント終端: 目標キーに到達して確定する
+        this._keyStart += this._keyMargin;
         this._keyMargin = 0;
       }
-    } else {
-      this._keyNow = this._keyStart + this._keyMargin;
     }
+    this._keyNow = this._keyStart + this._keyMargin;
     return this._keyNow;
   }
 

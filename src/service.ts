@@ -14,6 +14,7 @@ import { Unit } from "./unit.js";
 import { NoiseBuilder } from "./noise-builder.js";
 import { Frequency } from "./frequency.js";
 import {
+  PXTN_BASIC_SPS,
   PXTN_BITPERSAMPLE,
   PXTN_BUFSIZE_TIMEPAN,
   PXTN_MAX_TUNE_DELAY_STRUCT,
@@ -171,7 +172,7 @@ export class Service {
   private _bFixEvelsNum = false;
 
   private _dstChNum = 2;
-  private _dstSps = 44100;
+  private _dstSps = PXTN_BASIC_SPS;
   private _dstBytePerSmp = PXTN_BITPERSAMPLE / 8 * 2;
 
   private _ptnBldr: NoiseBuilder | null = null;
@@ -946,7 +947,7 @@ export class Service {
     }
   }
 
-  // x1x project..(36byte)
+  // x1x project 形式: size(4) + 名前(16) + テンポ(4) + クロック/拍子(4) + 予約(8) + sps(4)
   private _x1xProjectRead(desc: MemoryIo): boolean {
     if (!this._bInit) return false;
     const size = ioGetInt32LE(desc);
@@ -958,12 +959,14 @@ export class Service {
     const beatClock = ioGetU16LE(desc);
     const beatNum = ioGetU16LE(desc);
     if (beatTempo === null || beatClock === null || beatNum === null) return false;
+    // 以降のフィールドは旧形式で使われないため読み捨てる
     void ioGetU16LE(desc); // beat_note
     void ioGetU16LE(desc); // meas_num
     void ioGetU16LE(desc); // channel_num
     void ioGetU16LE(desc); // bps
     void ioGetUint32LE(desc); // sps
 
+    // 名前は NUL 終端。ここまでのバイト列を名前に使う
     let ns = 0;
     for (; ns < 16; ns++) {
       if (!name[ns]) break;
@@ -1188,7 +1191,7 @@ export class Service {
     this._mooBtNum = this.master.beatNum;
     this._mooBtTempo = this.master.beatTempo;
     this._mooClockRate = (60.0 * this._dstSps) / (this._mooBtTempo * this._mooBtClock);
-    this._mooSmpStride = 44100.0 / this._dstSps;
+    this._mooSmpStride = PXTN_BASIC_SPS / this._dstSps;
     this._mooTop = 0x7fff;
     this._mooTimePanIndex = 0;
 
@@ -1298,6 +1301,7 @@ export class Service {
         case EventKind.PORTAMENT:
           unit.tonePortament(Math.trunc(eve.value * this._mooClockRate));
           break;
+        // ビート・リピート系イベントは mooPreparation の時点でマスターに反映済みのため無視する
         case EventKind.BEATCLOCK:
         case EventKind.BEATTEMPO:
         case EventKind.BEATNUM:
@@ -1386,7 +1390,8 @@ export class Service {
       const voice = woice.getVoice(v)!;
       let ofsFreq = 0;
       if (voice.voiceFlags & PTV_VOICEFLAG_BEATFIT) {
-        ofsFreq = (voiceInst.smpBodyW * this._mooBtTempo) / (44100 * 60 * voice.tuning);
+        // 1 分あたりのサンプル数 (基準 sps × 60 秒) から BEATFIT のオフセット周波数を求める
+        ofsFreq = (voiceInst.smpBodyW * this._mooBtTempo) / (PXTN_BASIC_SPS * 60 * voice.tuning);
       } else {
         ofsFreq = this._mooFreq!.get(EVENTDEFAULT_BASICKEY - voice.basicKey) * voice.tuning;
       }
