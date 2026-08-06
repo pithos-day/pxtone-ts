@@ -3,17 +3,9 @@
 
 import type { WorkletToMain } from "../src/worklet/messages.js";
 import { renderOffline } from "./offline-render.js";
+import { SONGS } from "./songs.js";
 
 const SPS = 44100;
-const SONGS = [
-  "sample.ptcop",
-  "5LOVE[Quois].ptcop",
-  "Aisatsu[Rusk].ptcop",
-  "ComputerXXsan[gensai].ptcop",
-  "Fuwafuwa[PEPO].ptcop",
-  "overworld2_nes[Se-ko].ptcop",
-  "overworld2_orche[Se-ko].ptcop",
-];
 
 interface SongResult {
   name: string;

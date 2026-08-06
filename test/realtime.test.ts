@@ -5,6 +5,7 @@ import { cpSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, dirname, normalize, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SONGS } from "../web/songs.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDir = join(here, "..", "web");
@@ -13,16 +14,6 @@ const fixturesDst = join(webDir, "fixtures");
 const PORT = 8081;
 const URL = `http://localhost:${PORT}/verify-realtime.html`;
 const TIMEOUT_MS = 600000;
-
-const SONGS = [
-  "sample.ptcop",
-  "5LOVE[Quois].ptcop",
-  "Aisatsu[Rusk].ptcop",
-  "ComputerXXsan[gensai].ptcop",
-  "Fuwafuwa[PEPO].ptcop",
-  "overworld2_nes[Se-ko].ptcop",
-  "overworld2_orche[Se-ko].ptcop",
-];
 
 interface VerifySong {
   name: string;

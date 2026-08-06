@@ -1,52 +1,16 @@
 import { it, expect } from "vitest";
-import { Service } from "../src/service.js";
+import { Service, pxtnServiceMooCalcSampleNum } from "../src/service.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
-import { Woice, VoiceType, PTV_DATAFLAG_WAVE, PTV_DATAFLAG_ENVELOPE, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
-import { EventKind, EVENTDEFAULT_BASICKEY, EVENTDEFAULT_KEY } from "../src/event.js";
-import { pxtnServiceMooCalcSampleNum } from "../src/service.js";
-
-function makePtvWoice(): Woice {
-  const w = new Woice();
-  w.voiceAllocate(1);
-  const vc = w.getVoice(0)!;
-  vc.basicKey = EVENTDEFAULT_BASICKEY;
-  vc.volume = 128;
-  vc.pan = 64;
-  vc.tuning = 1.0;
-  vc.type = VoiceType.Coodinate;
-  vc.dataFlags = PTV_DATAFLAG_WAVE | PTV_DATAFLAG_ENVELOPE;
-  vc.voiceFlags = PTV_VOICEFLAG_WAVELOOP;
-  vc.wave = {
-    num: 5,
-    reso: 64,
-    points: [
-      { x: 0, y: 0 },
-      { x: 29, y: 0 },
-      { x: 30, y: 64 },
-      { x: 59, y: 64 },
-      { x: 60, y: 0 },
-    ],
-  };
-  vc.envelope = {
-    fps: 60,
-    headNum: 1,
-    bodyNum: 0,
-    tailNum: 1,
-    points: [
-      { x: 0, y: 64 },
-      { x: 1000, y: 0 },
-    ],
-  };
-  return w;
-}
+import { EventKind, EVENTDEFAULT_KEY } from "../src/event.js";
+import { makePtvWoice } from "./helpers.js";
 
 function buildService(beatClock: number): Service {
   const s = new Service();
   expect(s.initCollage(4096)).toBe(PxtnErr.OK);
   s.master.setBeatClock(beatClock);
   const ioW = new MemoryIo();
-  makePtvWoice().ptvWrite(ioW);
+  makePtvWoice({ volume: 128, loop: true }).ptvWrite(ioW);
   ioW.seek(0, 0);
   expect(s.woiceRead(0, ioW, 2)).toBe(PxtnErr.OK);
   s.unitAddNew();
