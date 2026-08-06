@@ -135,22 +135,22 @@ export class Noise {
   }
 
   private readOscillator(osc: NoiseOscillator, io: MemoryIo): PxtnErr {
-    const t = dataReadV(io);
-    if (t === null) return PxtnErr.DESC_R;
-    osc.type = t;
+    const type = dataReadV(io);
+    if (type === null) return PxtnErr.DESC_R;
+    osc.type = type;
     if (osc.type >= WaveType.num) return PxtnErr.FMT_UNKNOWN;
-    const b = dataReadV(io);
-    if (b === null) return PxtnErr.DESC_R;
-    osc.bRev = b !== 0;
-    const f = dataReadV(io);
-    if (f === null) return PxtnErr.DESC_R;
-    osc.freq = f / 10;
-    const v = dataReadV(io);
-    if (v === null) return PxtnErr.DESC_R;
-    osc.volume = v / 10;
-    const o = dataReadV(io);
-    if (o === null) return PxtnErr.DESC_R;
-    osc.offset = o / 10;
+    const reverse = dataReadV(io);
+    if (reverse === null) return PxtnErr.DESC_R;
+    osc.bRev = reverse !== 0;
+    const freq = dataReadV(io);
+    if (freq === null) return PxtnErr.DESC_R;
+    osc.freq = freq / 10;
+    const volume = dataReadV(io);
+    if (volume === null) return PxtnErr.DESC_R;
+    osc.volume = volume / 10;
+    const offset = dataReadV(io);
+    if (offset === null) return PxtnErr.DESC_R;
+    osc.offset = offset / 10;
     return PxtnErr.OK;
   }
 

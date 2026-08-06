@@ -46,6 +46,7 @@ export class OverDrive {
   }
 
   toneReady(): void {
+    // クリップ閾値: cut (50..99.9%) を int16 範囲に換算する。fround は C++ の float 精度再現
     this._cut16bitTop = Math.trunc(Math.fround(Math.fround(32767 * (100 - this._cutF)) / 100));
   }
 

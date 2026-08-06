@@ -148,6 +148,7 @@ export class Evelist {
       const e = this._eves[p]!;
       if (e.unitNo === unitNo) {
         if (e.clock >= clock1) break;
+        // tail イベントが clock1 を跨いで鳴っている場合は範囲の開始点として数え始める
         if (eventKindIsTail(e.kind) && e.clock + e.value > clock1) break;
       }
     }
@@ -420,6 +421,7 @@ export class Evelist {
     for (let p = this._start; p >= 0; p = this._eves[p]!.next) {
       const e = this._eves[p]!;
       if (e.unitNo === unitNo && e.kind === kind && e.clock >= clock1) {
+        // clock2 = -1 は「上限なし」を意味する
         if (clock2 === -1 || e.clock < clock2) {
           e.value += value;
           if (e.value < min) e.value = min;

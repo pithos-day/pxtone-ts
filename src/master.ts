@@ -179,36 +179,35 @@ export class Master {
     let repeatClock = 0;
     let lastClock = 0;
 
-    let absolute = 0;
+    let accumulatedClock = 0;
     let e = 0;
     for (; e < eventNum; e++) {
       const status = dataReadV(desc);
       const clock = dataReadV(desc);
       const volume = dataReadV(desc);
       if (status === null || clock === null || volume === null) break;
-      absolute += clock;
-      const curClock = absolute;
+      accumulatedClock += clock;
 
       switch (status) {
         // ビート系イベントは曲頭 (clock 0) でのみ有効。それ以外の位置にあれば壊れている
         case EventKind.BEATCLOCK:
           beatClock = volume;
-          if (curClock) return PxtnErr.DESC_BROKEN;
+          if (accumulatedClock) return PxtnErr.DESC_BROKEN;
           break;
         case EventKind.BEATTEMPO:
           beatTempo = int32ToFloat(volume);
-          if (curClock) return PxtnErr.DESC_BROKEN;
+          if (accumulatedClock) return PxtnErr.DESC_BROKEN;
           break;
         case EventKind.BEATNUM:
           beatNum = volume;
-          if (curClock) return PxtnErr.DESC_BROKEN;
+          if (accumulatedClock) return PxtnErr.DESC_BROKEN;
           break;
         case EventKind.REPEAT:
-          repeatClock = curClock;
+          repeatClock = accumulatedClock;
           if (volume) return PxtnErr.DESC_BROKEN;
           break;
         case EventKind.LAST:
-          lastClock = curClock;
+          lastClock = accumulatedClock;
           if (volume) return PxtnErr.DESC_BROKEN;
           break;
         default:

@@ -203,11 +203,12 @@ export class Unit {
       return;
     }
     const num = this._pWoice.voiceNum;
+    const voices = this._pWoice;
     for (let ch = 0; ch < PXTN_MAX_CHANNEL; ch++) {
       let timePanBuf = 0;
       for (let v = 0; v < num; v++) {
         const vt = this._vts[v]!;
-        const vi = this._pWoice.getInstance(v)!;
+        const vi = voices.getInstance(v)!;
         let work = 0;
         if (vt.lifeCount > 0) {
           // サンプル位置→バイト位置: 1 サンプル = 2ch × 16bit = 4 バイト、ch ごとに 2 バイト
@@ -221,7 +222,7 @@ export class Unit {
           work = Math.trunc((work * this._vVolume) / 128);
           work = Math.trunc((work * this._panVols[ch]!) / 64);
           if (vi.envSize) work = Math.trunc((work * vt.envVolume) / 128);
-          if (this._pWoice.getVoice(v)!.voiceFlags & PTV_VOICEFLAG_SMOOTH && vt.lifeCount < smoothSmp) {
+          if (voices.getVoice(v)!.voiceFlags & PTV_VOICEFLAG_SMOOTH && vt.lifeCount < smoothSmp) {
             work = Math.trunc((work * vt.lifeCount) / smoothSmp);
           }
         }
@@ -263,6 +264,7 @@ export class Unit {
         vt.smpPos += vt.offsetFreq * this._vTuning * freq;
         if (vt.smpPos >= vi.smpBodyW) {
           if (this._pWoice.getVoice(v)!.voiceFlags & PTV_VOICEFLAG_WAVELOOP) {
+            // ループ: 波形末尾を超えた分だけ巻き戻す (1 周で収まらない場合は 2 段階で処理)
             if (vt.smpPos >= vi.smpBodyW) vt.smpPos -= vi.smpBodyW;
             if (vt.smpPos >= vi.smpBodyW) vt.smpPos = 0;
           } else {

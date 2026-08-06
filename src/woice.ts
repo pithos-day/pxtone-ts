@@ -211,11 +211,13 @@ export class Woice {
 
   slim(): void {
     for (let i = this._voiceNum - 1; i >= 0; i--) {
+      const vc = this._voices[i]!;
+      // 無音 (volume 0) または波形が 1 点未満の音色は削除して詰める
       let bRemove = false;
-      if (!this._voices[i]!.volume) bRemove = true;
-      if (this._voices[i]!.type === VoiceType.Coodinate && this._voices[i]!.wave.num <= 1) bRemove = true;
+      if (!vc.volume) bRemove = true;
+      if (vc.type === VoiceType.Coodinate && vc.wave.num <= 1) bRemove = true;
       if (bRemove) {
-        releaseVoiceUnit(this._voices[i]!);
+        releaseVoiceUnit(vc);
         this._voices.splice(i, 1);
         this._voinsts.splice(i, 1);
         this._voiceNum--;
@@ -384,6 +386,7 @@ export class Woice {
         let offset = 0;
         let headCount = 0;
         for (let e = 0; e < enve.headNum; e++) {
+          // 先頭点、または座標が非ゼロの変化点のみを保持する (重複点を除去)
           if (!e || enve.points[e]!.x || enve.points[e]!.y) {
             offset += Math.trunc((enve.points[e]!.x * sps) / enve.fps);
             pointList.push({ x: offset, y: enve.points[e]!.y });
