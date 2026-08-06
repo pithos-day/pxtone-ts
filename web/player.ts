@@ -3,9 +3,7 @@
 // ?offline=1: オフライン全曲レンダリング + AudioBuffer 再生 (旧実装・検証リファレンス)
 
 import { RealtimePlayer } from "./realtime-player.js";
-import { Service } from "../src/service.js";
-import { MemoryIo } from "../src/data.js";
-import { PxtnErr } from "../src/error.js";
+import { renderOffline } from "./offline-render.js";
 
 const SAMPLE_PATH = "./sample.ptcop";
 const params = new URLSearchParams(location.search);
@@ -23,7 +21,6 @@ const canvas = document.getElementById("wave") as HTMLCanvasElement;
 const canvasCtx = canvas.getContext("2d")!;
 
 // ---- 共通状態 ----
-let songName = "";
 let totalSec = 0;
 let playOffsetSec = 0;
 let songLoaded = false;
@@ -159,47 +156,24 @@ async function loadOffline(bytes: Uint8Array, name: string): Promise<void> {
   log("読み込み中...");
   await new Promise((r) => setTimeout(r, 10));
 
-  const s = new Service();
-  const initErr = s.init();
-  if (initErr !== PxtnErr.OK) {
-    log(`init 失敗: ${initErr}`);
-    return;
-  }
-  const io = new MemoryIo(bytes);
-  if (s.read(io) !== PxtnErr.OK) {
-    log("読み込み失敗 (read)");
-    return;
-  }
-  if (s.tonesReady() !== PxtnErr.OK) {
-    log("読み込み失敗 (tonesReady)");
-    return;
-  }
-  s.setDestinationQuality(2, 44100);
-  if (!s.mooPreparation(null)) {
-    log("レンダリング準備失敗");
-    return;
-  }
-
-  const total = s.mooGetSamplingEnd();
-  songName = name;
-  totalSec = total / 44100;
-  log(`レンダリング中... (${totalSec.toFixed(1)}秒, ${s.woiceNum}ボイス, ${s.unitNum}ユニット)`);
-  songTitle.textContent = name;
-
-  const out = new Int16Array(total * 2);
+  log("レンダリング中...");
   const t0 = performance.now();
-  for (let pos = 0; pos < total; pos += 44100) {
-    const n = Math.min(44100, total - pos);
-    s.Moo(out.subarray(pos * 2), n);
+  const off = renderOffline(bytes, 44100);
+  if (!off) {
+    log("レンダリング失敗 (read/準備エラー)");
+    return;
   }
   const ms = performance.now() - t0;
+  const total = off.totalSample;
+  totalSec = total / 44100;
   log(`レンダリング完了 (${(ms / 1000).toFixed(1)}秒) — 再生できます`);
+  songTitle.textContent = name;
 
   if (!audioCtx) audioCtx = new AudioContext();
   const ab = audioCtx.createBuffer(2, total, 44100);
   for (let ch = 0; ch < 2; ch++) {
     const data = ab.getChannelData(ch);
-    for (let i = 0; i < total; i++) data[i] = out[i * 2 + ch]! / 32768;
+    for (let i = 0; i < total; i++) data[i] = off.data[i * 2 + ch]! / 32768;
   }
   buffer = ab;
   playOffsetSec = 0;
@@ -278,7 +252,6 @@ async function loadRealtime(bytes: Uint8Array, name: string): Promise<void> {
   } else {
     totalSec = player.durationSec;
   }
-  songName = name;
   songTitle.textContent = name;
   playOffsetSec = 0;
   redrawWave();
@@ -368,7 +341,8 @@ if (params.has("autoload")) {
 // ?autoplay=1 でロード完了後に自動再生
 if (params.has("autoplay")) {
   const t = setInterval(() => {
-    if (songLoaded && btnPlay.textContent.includes("再生")) {
+    // 再生状態は UI 文字列ではなく、モードごとの再生フラグで判定する
+    if (songLoaded && !source && !rtIsPlaying()) {
       clearInterval(t);
       btnPlay.click();
     }

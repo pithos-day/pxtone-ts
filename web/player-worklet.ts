@@ -147,7 +147,8 @@ class PxtoneWorkletProcessor extends AudioWorkletProcessor {
     }
 
     const svc = this.service;
-    const ok = svc.Moo(this.scratch.subarray(0, block * chNum), block);
+    // Moo の戻り値は「バッファ生成できたか」だが、終了判定は mooIsEndVomit で行う
+    svc.Moo(this.scratch.subarray(0, block * chNum), block);
     for (let i = 0; i < block; i++) {
       for (let ch = 0; ch < chNum; ch++) {
         out[ch]![i] = this.scratch[i * chNum + ch]! / 32768;
@@ -167,7 +168,6 @@ class PxtoneWorkletProcessor extends AudioWorkletProcessor {
       }
     }
 
-    void ok;
     return true;
   }
 }

@@ -17,7 +17,20 @@ export function renderOffline(bytes: Uint8Array, sps = 44100, chunk = 44100): Of
   if (s.read(io) !== PxtnErr.OK) return null;
   if (s.tonesReady() !== PxtnErr.OK) return null;
   s.setDestinationQuality(2, sps);
-  if (!s.mooPreparation({ startPosMeas: 0, startPosSample: 0, startPosFloat: 0, measEnd: 0, measRepeat: 0, fadeinSec: 0, flags: 0, masterVolume: 1.0 })) return null;
+  if (
+    !s.mooPreparation({
+      startPosMeas: 0,
+      startPosSample: 0,
+      startPosFloat: 0,
+      measEnd: 0,
+      measRepeat: 0,
+      fadeinSec: 0,
+      flags: 0,
+      masterVolume: 1.0,
+    })
+  ) {
+    return null;
+  }
   const total = s.mooGetSamplingEnd();
   const out = new Int16Array(total * 2);
   for (let pos = 0; pos < total; pos += chunk) {

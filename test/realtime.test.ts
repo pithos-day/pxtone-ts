@@ -88,9 +88,8 @@ afterAll(() => {
 it(
   "offline and realtime (AudioWorklet) rendering produce identical output",
   async () => {
-    const chromiumPath = ["/usr/sbin/chromium", "/usr/bin/chromium", "chromium"].find((p) =>
-      p.includes("/") ? existsSync(p) : true,
-    )!;
+    // 絶対パスは存在確認、コマンド名は PATH から解決を試みる
+    const chromiumPath = ["/usr/sbin/chromium", "/usr/bin/chromium"].find(existsSync) ?? "chromium";
 
     chromium = spawn(chromiumPath, ["--headless=new", "--no-sandbox", "--disable-gpu", URL], {
       stdio: "ignore",
