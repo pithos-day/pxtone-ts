@@ -190,6 +190,7 @@ export class Master {
       const curClock = absolute;
 
       switch (status) {
+        // ビート系イベントは曲頭 (clock 0) でのみ有効。それ以外の位置にあれば壊れている
         case EventKind.BEATCLOCK:
           beatClock = volume;
           if (curClock) return PxtnErr.DESC_BROKEN;

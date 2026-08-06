@@ -2,6 +2,7 @@
 
 import { PxtnErr } from "./error.js";
 import { MemoryIo, asciiBytesToString, ioGetInt32LE, ioGetU16LE, ioGetBytes } from "./data.js";
+import { i16At } from "./pcm.js";
 import type { Woice, VoiceInstance } from "./woice.js";
 import { PXTN_BASIC_SPS, PXTN_BUFSIZE_TIMEPAN, PXTN_MAX_CHANNEL, PXTN_MAX_TUNEWOICENAME, PXTN_MAX_UNIT_CONTROL_VOICE } from "./constants.js";
 import {
@@ -284,39 +285,39 @@ export class Unit {
     return this._panTimeBufs[ch]![idx]!;
   }
 
-  readV1x(io: MemoryIo, groupOut: { value: number }): boolean {
+  // size を読み捨て、type / group を読み取る。readName 時は名前 (16byte) も読み取る
+  private readTypeAndGroup(io: MemoryIo, readName: boolean): { type: number; group: number } | null {
     const size = ioGetInt32LE(io);
-    if (size === null) return false;
+    if (size === null) return null;
     void size;
-    const name = ioGetBytes(io, 16);
-    if (name === null) return false;
+    if (readName) {
+      const name = ioGetBytes(io, 16);
+      if (name === null) return null;
+      this.setNameBuf(name);
+    }
     const type = ioGetU16LE(io);
-    if (type === null) return false;
+    if (type === null) return null;
     const group = ioGetU16LE(io);
-    if (group === null) return false;
-    if (type !== WoiceType.PCM) return false;
-    this.setNameBuf(name);
-    groupOut.value = group;
+    if (group === null) return null;
+    return { type, group };
+  }
+
+  readV1x(io: MemoryIo, groupOut: { value: number }): boolean {
+    const r = this.readTypeAndGroup(io, true);
+    if (!r) return false;
+    if (r.type !== WoiceType.PCM) return false;
+    groupOut.value = r.group;
     return true;
   }
 
   readV3x(io: MemoryIo, groupOut: { value: number }): PxtnErr {
-    const size = ioGetInt32LE(io);
-    if (size === null) return PxtnErr.DESC_R;
-    void size;
-    const type = ioGetU16LE(io);
-    if (type === null) return PxtnErr.DESC_R;
-    const group = ioGetU16LE(io);
-    if (group === null) return PxtnErr.DESC_R;
-    if (type !== WoiceType.PCM && type !== WoiceType.PTV && type !== WoiceType.PTN)
+    const r = this.readTypeAndGroup(io, false);
+    if (!r) return PxtnErr.DESC_R;
+    if (r.type !== WoiceType.PCM && r.type !== WoiceType.PTV && r.type !== WoiceType.PTN)
       return PxtnErr.FMT_UNKNOWN;
-    groupOut.value = group;
+    groupOut.value = r.group;
     return PxtnErr.OK;
   }
-}
-
-function i16At(buf: Uint8Array, pos: number): number {
-  return (buf[pos]! | (buf[pos + 1]! << 8)) << 16 >> 16;
 }
 
 export { PXTN_BUFSIZE_TIMEPAN, PTV_VOICEFLAG_SMOOTH, PTV_VOICEFLAG_WAVELOOP };

@@ -18,6 +18,7 @@ import {
   PXTN_BASIC_SPS,
   PXTN_BITPERSAMPLE,
   PXTN_BUFSIZE_TIMEPAN,
+  PXTN_MAX_CHANNEL,
   PXTN_MAX_TUNE_DELAY_STRUCT,
   PXTN_MAX_TUNE_GROUP_NUM,
   PXTN_MAX_TUNE_OVERDRIVE_STRUCT,
@@ -174,7 +175,8 @@ export class Service {
 
   private _dstChNum = 2;
   private _dstSps = PXTN_BASIC_SPS;
-  private _dstBytePerSmp = PXTN_BITPERSAMPLE / 8 * 2;
+  // 1 サンプル分のバイト数 (2ch × 16bit)
+  private _dstBytePerSmp = (PXTN_BITPERSAMPLE / 8) * PXTN_MAX_CHANNEL;
 
   private _ptnBldr: NoiseBuilder | null = null;
 

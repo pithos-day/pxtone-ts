@@ -529,12 +529,17 @@ export class Evelist {
     return count;
   }
 
-  // linear 読み込みモード
-  linearStart(): boolean {
+  // 読み込みモード開始: スロットを初期化して先頭から書き込めるようにする
+  private beginRead(): boolean {
     if (this._eves.length === 0) return false;
     this.clear();
     this._nextSlot = 0;
     return true;
+  }
+
+  // linear 読み込みモード
+  linearStart(): boolean {
+    return this.beginRead();
   }
 
   linearAddI(clock: number, unitNo: number, kind: number, value: number): void {
@@ -564,9 +569,7 @@ export class Evelist {
 
   // x4x 読み込み
   x4xReadStart(): boolean {
-    if (this._eves.length === 0) return false;
-    this.clear();
-    this._nextSlot = 0;
+    if (!this.beginRead()) return false;
     this._pX4xRec = -1;
     return true;
   }

@@ -71,16 +71,17 @@ export class MemoryIo {
     return true;
   }
 
-  seek(mode: number, size: number): boolean {
+  // mode に応じて offset へ移動する (SEEK_SET: 先頭から / SEEK_CUR: 現在位置から / SEEK_END: 末尾から)
+  seek(mode: number, offset: number): boolean {
     if (mode === SEEK_SET) {
-      if (size < 0) return false;
-      this._pos = size;
+      if (offset < 0) return false;
+      this._pos = offset;
     } else if (mode === SEEK_CUR) {
-      if (this._pos + size < 0) return false;
-      this._pos += size;
+      if (this._pos + offset < 0) return false;
+      this._pos += offset;
     } else if (mode === SEEK_END) {
-      if (this._len + size < 0) return false;
-      this._pos = this._len + size;
+      if (this._len + offset < 0) return false;
+      this._pos = this._len + offset;
     } else {
       return false;
     }

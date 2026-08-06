@@ -363,7 +363,7 @@ function putI16(dst: Uint8Array, off: number, v: number): void {
 }
 
 // リトルエンディアン 2 バイトを int16 として読み、符号拡張する
-function i16At(b: Uint8Array, off: number): number {
+export function i16At(b: Uint8Array, off: number): number {
   return (b[off]! | (b[off + 1]! << 8)) << 16 >> 16;
 }
 
