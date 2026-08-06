@@ -1,10 +1,8 @@
 import { it, expect } from "vitest";
 import { MemoryIo } from "../src/data.js";
-import { Woice, WoiceType, VoiceType, PTV_DATAFLAG_WAVE, PTV_DATAFLAG_ENVELOPE, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
-import { Pcm } from "../src/pcm.js";
+import { Woice, WoiceType, VoiceType, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
 import { PxtnErr } from "../src/error.js";
-import { EVENTDEFAULT_BASICKEY } from "../src/event.js";
-import { makePtvWoice } from "./helpers.js";
+import { makePcmWoice, makePtvWoice } from "./helpers.js";
 
 it("matePTV round trips", () => {
   const w = makePtvWoice();
@@ -37,17 +35,8 @@ it("PTV read() parses a raw PTVOICE- blob", () => {
 });
 
 it("matePCM round trips", () => {
-  const w = new Woice();
-  w.voiceAllocate(1);
-  const vc = w.getVoice(0)!;
-  vc.type = VoiceType.Sampling;
-  const p = new Pcm();
-  p.create(1, 44100, 16, 8);
-  const dv = new DataView(p.pBuf!.buffer);
-  for (let i = 0; i < 8; i++) dv.setInt16(i * 2, (i + 1) * 500, true);
-  vc.pcm = p;
-  vc.basicKey = EVENTDEFAULT_BASICKEY;
-  vc.voiceFlags = PTV_VOICEFLAG_WAVELOOP;
+  const w = makePcmWoice(true);
+  const p = w.getVoice(0)!.pcm;
   const io = new MemoryIo();
   expect(w.ioMatePcmW(io)).toBe(true);
   const w2 = new Woice();

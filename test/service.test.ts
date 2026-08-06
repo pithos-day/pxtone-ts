@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 import { Service } from "../src/service.js";
-import { MemoryIo, ioPutAsciiString } from "../src/data.js";
+import { MemoryIo, ioPutAsciiString, ioPutFloatLE, ioPutInt32LE, ioPutU16LE, ioPutU8 } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
 import { WoiceType } from "../src/woice.js";
 import { EventKind, EVENTDEFAULT_KEY } from "../src/event.js";
@@ -60,19 +60,19 @@ it("rejects anti operation tag", () => {
   expect(s.init()).toBe(PxtnErr.OK);
   const io = new MemoryIo();
   ioPutAsciiString(io, "PTCOLLAGE-071119");
-  ioPutU16(io, 0);
-  ioPutU16(io, 0);
+  ioPutU16LE(io, 0);
+  ioPutU16LE(io, 0);
   ioPutAsciiString(io, "MasterV5");
-  ioPutI32(io, 15);
-  ioPutU16(io, 480); // beat_clock
+  ioPutInt32LE(io, 15);
+  ioPutU16LE(io, 480); // beat_clock
   ioPutU8(io, 4); // beat_num
-  ioPutF32(io, 120.0); // beat_tempo
-  ioPutI32(io, 0); // clock_repeat
-  ioPutI32(io, 0); // clock_last
+  ioPutFloatLE(io, 120.0); // beat_tempo
+  ioPutInt32LE(io, 0); // clock_repeat
+  ioPutInt32LE(io, 0); // clock_last
   ioPutAsciiString(io, "antiOPER");
-  ioPutI32(io, 0);
+  ioPutInt32LE(io, 0);
   ioPutAsciiString(io, "pxtoneND");
-  ioPutI32(io, 0);
+  ioPutInt32LE(io, 0);
   io.seek(0, 0);
   expect(s.read(io)).toBe(PxtnErr.ANTI_OPERATION);
 });
@@ -93,23 +93,3 @@ it("tune write/read keeps same event data", () => {
   expect(s2.evels.count).toBe(2);
 });
 
-
-function ioPutU16(io: MemoryIo, v: number): void {
-  io.write(new Uint8Array([v & 0xff, (v >> 8) & 0xff]), 1, 2);
-}
-
-function ioPutI32(io: MemoryIo, v: number): void {
-  const b = new Uint8Array(4);
-  new DataView(b.buffer).setInt32(0, v, true);
-  io.write(b, 1, 4);
-}
-
-function ioPutF32(io: MemoryIo, v: number): void {
-  const b = new Uint8Array(4);
-  new DataView(b.buffer).setFloat32(0, v, true);
-  io.write(b, 1, 4);
-}
-
-function ioPutU8(io: MemoryIo, v: number): void {
-  io.write(new Uint8Array([v]), 1, 1);
-}

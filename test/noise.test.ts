@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { MemoryIo } from "../src/data.js";
+import { MemoryIo, ioPutAsciiString } from "../src/data.js";
 import { Noise, WaveType } from "../src/noise.js";
 import { PxtnErr } from "../src/error.js";
 
@@ -44,9 +44,9 @@ it("round trips PTN blob", () => {
   expect(n.compare(m)).toBe(0);
 });
 
-it("rejects unsupported version/flags", () => {
+it("rejects unsupported version", () => {
   const io = new MemoryIo();
-  io.write(new Uint8Array(8).map((_, i) => "PTNOISE-".charCodeAt(i)), 1, 8);
+  ioPutAsciiString(io, "PTNOISE-");
   io.write(new Uint8Array([0xff, 0xff, 0xff, 0x7f]), 1, 4); // バージョン巨大
   const n = new Noise();
   // ver > 最新 → fmt_new

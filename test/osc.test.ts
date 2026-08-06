@@ -9,14 +9,13 @@ const WAVE: { x: number; y: number }[] = [
   { x: 60, y: 0 },
 ];
 
-it("coodinate: returns interpolated samples", () => {
+it("coodinate: interpolates between points and holds flat segments", () => {
   const o = new Oscillator();
   o.readyGetSample(WAVE, WAVE.length, 34, 400, 64);
   expect(o.getOneSampleCoodinate(0)).toBe(0);
-  expect(o.getOneSampleCoodinate(188)).toBeCloseTo((64 * 34) / 128 / 128, 10); // 頂点
-  expect(o.getOneSampleCoodinate(300)).toBeCloseTo(64 * 34 / 128 / 128, 10); // 平坦部分
-  expect(o.getOneSampleCoodinate(399)).toBeCloseTo(0, 10); // 末端→先頭へラップ
-  // 直線補間: x=45(30〜59の中間)は y=64 一定だが、傾きのある区間では線形
+  expect(o.getOneSampleCoodinate(188)).toBeCloseTo((64 * 34) / 128 / 128, 10); // 頂点 (30,64) の位置
+  expect(o.getOneSampleCoodinate(300)).toBeCloseTo((64 * 34) / 128 / 128, 10); // 平坦部分 (y=64 一定)
+  // 直線補間: (0,0)→(64,64) の斜辺の中点 (i = 64*200/400 = 32)
   const o2 = new Oscillator();
   o2.readyGetSample(
     [
@@ -28,8 +27,13 @@ it("coodinate: returns interpolated samples", () => {
     400,
     64,
   );
-  // i = 64*200/400 = 32 → 斜辺中点
-  expect(o2.getOneSampleCoodinate(200)).toBeCloseTo(32 / 128 / 128 * 128, 10);
+  expect(o2.getOneSampleCoodinate(200)).toBeCloseTo((32 * 128) / 128 / 128, 10);
+});
+
+it("coodinate: wraps from the last point to the first", () => {
+  const o = new Oscillator();
+  o.readyGetSample(WAVE, WAVE.length, 34, 400, 64);
+  expect(o.getOneSampleCoodinate(399)).toBeCloseTo(0, 10); // 末端→先頭へラップ
 });
 
 it("overtone: Fourier sum with volume scaling", () => {

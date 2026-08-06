@@ -81,7 +81,8 @@ it("stops rendering at song end without loop", () => {
     rendered += 44100;
   }
   expect(rendered).toBeGreaterThanOrEqual(264600);
-  expect(s2.mooGetNowClock()).toBe(5760); // end clock = 264600/45.9375
+  // end clock = サンプル数 ÷ クロックレート (44100 ÷ (60*120/480) = 45.9375)
+  expect(s2.mooGetNowClock()).toBe(5760);
 });
 
 it("loops back to repeat point", () => {
