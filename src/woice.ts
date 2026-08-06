@@ -28,7 +28,7 @@ import {
 import { Pcm } from "./pcm.js";
 import { Noise } from "./noise.js";
 import type { NoiseBuilder } from "./noise-builder.js";
-import { EVENTDEFAULT_BASICKEY } from "./event.js";
+import { EVENTDEFAULT_BASICKEY, panToVolumes } from "./event.js";
 import { PXTN_MAX_TUNEWOICENAME } from "./constants.js";
 import { Oscillator, type PulsePoint } from "./osc.js";
 
@@ -282,11 +282,7 @@ export class Woice {
 
   private updateWavePTV(vc: VoiceUnit, vi: VoiceInstance, ch: number, bps: number): void {
     const osci = new Oscillator();
-    const panVolume: [number, number] = [64, 64];
-    if (ch === 2) {
-      if (vc.pan > 64) panVolume[0] = 128 - vc.pan;
-      if (vc.pan < 64) panVolume[1] = vc.pan;
-    }
+    const panVolume = ch === 2 ? panToVolumes(vc.pan) : [64, 64] as [number, number];
     osci.readyGetSample(vc.wave.points, vc.wave.num, vc.volume, vi.smpBodyW, vc.wave.reso);
     const isOvertone = vc.type === VoiceType.Overtone;
     vi.bSineOver = false;

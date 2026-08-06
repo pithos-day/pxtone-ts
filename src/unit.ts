@@ -10,6 +10,7 @@ import {
   EVENTDEFAULT_TUNING,
   EVENTDEFAULT_VELOCITY,
   EVENTDEFAULT_VOLUME,
+  panToVolumes,
 } from "./event.js";
 import { PTV_VOICEFLAG_SMOOTH, PTV_VOICEFLAG_WAVELOOP, WoiceType } from "./woice.js";
 
@@ -143,12 +144,7 @@ export class Unit {
   }
 
   tonePanVolume(ch: number, pan: number): void {
-    this._panVols[0] = 64;
-    this._panVols[1] = 64;
-    if (ch === 2) {
-      if (pan >= 64) this._panVols[0] = 128 - pan;
-      else this._panVols[1] = pan;
-    }
+    this._panVols = ch === 2 ? panToVolumes(pan) : [64, 64];
   }
 
   tonePanTime(ch: number, pan: number, sps: number): void {

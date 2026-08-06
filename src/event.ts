@@ -39,6 +39,15 @@ export function eventKindIsTail(kind: number): boolean {
   return kind === EventKind.ON || kind === EventKind.PORTAMENT;
 }
 
+// パン値 (0..127、中央 64) を左右チャンネルの音量へ変換する。
+// 中央より右なら左を減衰、左なら右を減衰する。
+export function panToVolumes(pan: number): [number, number] {
+  const volumes: [number, number] = [64, 64];
+  if (pan > 64) volumes[0] = 128 - pan;
+  else if (pan < 64) volumes[1] = pan;
+  return volumes;
+}
+
 const PRIORITY_TABLE: readonly number[] = [
   0, // NULL
   50, // ON

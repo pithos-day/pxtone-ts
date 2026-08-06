@@ -99,7 +99,7 @@ export class Pcm {
 
   write(io: MemoryIo, pstrLIST?: string): boolean {
     if (!this._pSmp) return false;
-    const sampleSize = ((this._smpHead + this._smpBody + this._smpTail) * this._ch * this._bps) / 8;
+    const sampleSize = this.totalByteSize;
     const bText = !!pstrLIST && pstrLIST.length > 0;
     let isftSize = 0;
     let listSize = 0;
@@ -141,7 +141,7 @@ export class Pcm {
   convertChannelNum(newCh: number): boolean {
     if (!this._pSmp) return false;
     if (this._ch === newCh) return true;
-    const sampleSize = ((this._smpHead + this._smpBody + this._smpTail) * this._ch * this._bps) / 8;
+    const sampleSize = this.totalByteSize;
     const src = this._pSmp;
     let work: Uint8Array;
     if (newCh === 2) {
@@ -167,8 +167,8 @@ export class Pcm {
         }
       } else {
         for (let a = 0, b = 0; a < sampleSize; a += 4, b += 2) {
-          const temp1 = (src[a]! | (src[a + 1]! << 8)) << 16 >> 16;
-          const temp2 = (src[a + 2]! | (src[a + 3]! << 8)) << 16 >> 16;
+          const temp1 = i16At(src, a);
+          const temp2 = i16At(src, a + 2);
           putI16(work, b, ((temp1 + temp2) / 2) | 0);
         }
       }
@@ -181,13 +181,13 @@ export class Pcm {
   convertBitPerSample(newBps: number): boolean {
     if (!this._pSmp) return false;
     if (this._bps === newBps) return true;
-    const sampleSize = ((this._smpHead + this._smpBody + this._smpTail) * this._ch * this._bps) / 8;
+    const sampleSize = this.totalByteSize;
     const src = this._pSmp;
     let work: Uint8Array;
     if (newBps === 8) {
       work = new Uint8Array(sampleSize / 2);
       for (let a = 0, b = 0; a < sampleSize; a += 2, b++) {
-        let temp1 = (src[a]! | (src[a + 1]! << 8)) << 16 >> 16;
+        let temp1 = i16At(src, a);
         temp1 = (temp1 / 0x100) + 128;
         work[b] = temp1 & 0xff;
       }
@@ -269,7 +269,7 @@ export class Pcm {
 
   convertVolume(v: number): boolean {
     if (!this._pSmp) return false;
-    const sampleNum = (this._smpHead + this._smpBody + this._smpTail) * this._ch;
+    const sampleNum = this.totalSampleNum;
     const p = this._pSmp;
     if (this._bps === 8) {
       for (let i = 0; i < sampleNum; i++) {
@@ -345,13 +345,26 @@ export class Pcm {
     return (this._smpBody + this._smpHead + this._smpTail) / this._sps;
   }
   get bufSize(): number {
-    return ((this._smpHead + this._smpBody + this._smpTail) * this._ch * this._bps) / 8;
+    return this.totalByteSize;
+  }
+  // head/body/tail 全体のサンプル数 (チャンネル込み)
+  get totalSampleNum(): number {
+    return (this._smpHead + this._smpBody + this._smpTail) * this._ch;
+  }
+  // head/body/tail 全体のバイト数 (チャンネル・ビット深度込み)
+  get totalByteSize(): number {
+    return (this.totalSampleNum * this._bps) / 8;
   }
 }
 
 function putI16(dst: Uint8Array, off: number, v: number): void {
   dst[off] = v & 0xff;
   dst[off + 1] = (v >> 8) & 0xff;
+}
+
+// リトルエンディアン 2 バイトを int16 として読み、符号拡張する
+function i16At(b: Uint8Array, off: number): number {
+  return (b[off]! | (b[off + 1]! << 8)) << 16 >> 16;
 }
 
 function u16View(b: Uint8Array): Uint16Array {
