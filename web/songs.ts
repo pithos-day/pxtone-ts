@@ -9,4 +9,5 @@ export const SONGS = [
   "Fuwafuwa[PEPO].ptcop",
   "overworld2_nes[Se-ko].ptcop",
   "overworld2_orche[Se-ko].ptcop",
+  "Funeral_March.ptcop",
 ];

@@ -3,6 +3,7 @@
 
 import type { WorkletToMain } from "../src/worklet/messages.js";
 import { renderOffline } from "./offline-render.js";
+import { convertOggvToPcm } from "../src/oggv.js";
 import { SONGS } from "./songs.js";
 
 const SPS = 44100;
@@ -87,13 +88,18 @@ async function main(): Promise<void> {
       continue;
     }
     const ab = await res.arrayBuffer();
-    const offline = await renderOffline(new Uint8Array(ab.slice(0)), SPS);
+    // OGGV ボイスは worklet に fetch がないため、メインスレッドで PCM 化してから渡す
+    const converted = (await convertOggvToPcm(new Uint8Array(ab.slice(0)))) ?? new Uint8Array(ab);
+    const offline = await renderOffline(converted, SPS);
     if (!offline) {
       results.push({ name, ok: false, error: "offline render failed", maxDiff: -1, diffCount: 0, total: 0 });
       setResult();
       continue;
     }
-    const online = await renderOnline(ab.slice(0), offline.totalSample).catch((e: unknown) => {
+    const online = await renderOnline(
+      converted.buffer.slice(converted.byteOffset, converted.byteOffset + converted.byteLength) as ArrayBuffer,
+      offline.totalSample,
+    ).catch((e: unknown) => {
       results.push({ name, ok: false, error: `online render failed: ${String(e)}`, maxDiff: -1, diffCount: 0, total: 0 });
       setResult();
       return null;

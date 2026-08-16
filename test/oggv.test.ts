@@ -139,3 +139,68 @@ it("convertOggvToPcm passes through files without OGGV", async () => {
   expect(result).not.toBeNull();
   expect(result).toEqual(bytes);
 });
+
+it("reads and plays the real Funeral_March.ptcop (OGGV)", async () => {
+  const bytes = new Uint8Array(readFileSync(join(here, "fixtures", "Funeral_March.ptcop")));
+  const s = new Service();
+  expect(s.init()).toBe(PxtnErr.OK);
+  const io = new MemoryIo(bytes);
+  expect(s.read(io)).toBe(PxtnErr.OK);
+  expect(s.woiceNum).toBe(1);
+  expect(s.woiceGet(0)!.type).toBe(WoiceType.OGGV);
+  expect(s.evels.count).toBe(6989);
+
+  expect(await s.decodeOggvAll(defaultOggvDecoder)).toBe(PxtnErr.OK);
+  expect(s.woiceGet(0)!.isOggvDecoded()).toBe(true);
+  expect(s.tonesReady()).toBe(PxtnErr.OK);
+
+  s.setDestinationQuality(2, 44100);
+  expect(s.mooPreparation(null)).toBe(true);
+  const out = new Int16Array(44100 * 2);
+  expect(s.Moo(out, 44100)).toBe(true);
+  let max = 0;
+  for (let i = 0; i < out.length; i++) {
+    const a = Math.abs(out[i]!);
+    if (a > max) max = a;
+  }
+  expect(max).toBeGreaterThan(100);
+});
+
+it("converts Funeral_March.ptcop to PCM and renders identically", async () => {
+  const bytes = new Uint8Array(readFileSync(join(here, "fixtures", "Funeral_March.ptcop")));
+  const converted = await convertOggvToPcm(bytes);
+  expect(converted).not.toBeNull();
+
+  const s = new Service();
+  expect(s.init()).toBe(PxtnErr.OK);
+  const io = new MemoryIo(converted!);
+  expect(s.read(io)).toBe(PxtnErr.OK);
+  expect(s.woiceGet(0)!.type).toBe(WoiceType.PCM);
+  expect(s.tonesReady()).toBe(PxtnErr.OK);
+  s.setDestinationQuality(2, 44100);
+  expect(
+    s.mooPreparation({ startPosMeas: 0, startPosSample: 0, startPosFloat: 0, measEnd: 0, measRepeat: 0, fadeinSec: 0, flags: 0, masterVolume: 1.0 }),
+  ).toBe(true);
+
+  // 変換前後の出力が一致する
+  const s2 = new Service();
+  expect(s2.init()).toBe(PxtnErr.OK);
+  const io2 = new MemoryIo(bytes);
+  expect(s2.read(io2)).toBe(PxtnErr.OK);
+  expect(await s2.decodeOggvAll(defaultOggvDecoder)).toBe(PxtnErr.OK);
+  expect(s2.tonesReady()).toBe(PxtnErr.OK);
+  s2.setDestinationQuality(2, 44100);
+  expect(
+    s2.mooPreparation({ startPosMeas: 0, startPosSample: 0, startPosFloat: 0, measEnd: 0, measRepeat: 0, fadeinSec: 0, flags: 0, masterVolume: 1.0 }),
+  ).toBe(true);
+
+  const total = s.mooGetSamplingEnd();
+  expect(s2.mooGetSamplingEnd()).toBe(total);
+  const a = new Int16Array(Math.min(total, 44100) * 2);
+  const b = new Int16Array(Math.min(total, 44100) * 2);
+  expect(s.Moo(a, Math.min(total, 44100))).toBe(true);
+  expect(s2.Moo(b, Math.min(total, 44100))).toBe(true);
+  for (let i = 0; i < a.length; i++) {
+    expect(a[i]).toBe(b[i]);
+  }
+});
