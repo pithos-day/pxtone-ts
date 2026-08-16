@@ -3,7 +3,6 @@
 
 import type { MainToWorklet, WorkletToMain } from "../src/worklet/messages.js";
 import { renderOffline, type OfflineRenderResult } from "./offline-render.js";
-import { convertOggvToPcm } from "../src/oggv.js";
 
 export interface RealtimePlayerOptions {
   onPosition?: (sample: number) => void;
@@ -75,12 +74,12 @@ export class RealtimePlayer {
     }
   }
 
+  // 変換済み (convertOggvToPcm 済み) の ptcop バイト列を worklet に渡す。
+  // OGGV デコードは呼び出し側で行うこと (AudioWorklet スコープには fetch がなく
+  // WASM を取得できないため、デコードはメインスレッドでのみ実行する)
   async load(bytes: Uint8Array): Promise<boolean> {
     await this.init();
-    // OGGV ボイスはメインスレッドでデコードし、PCM 化した ptcop を worklet に渡す
-    // (AudioWorklet スコープには fetch がなく WASM の取得ができないため)
-    const src = (await convertOggvToPcm(bytes)) ?? bytes;
-    const buf = src.buffer.slice(src.byteOffset, src.byteOffset + src.byteLength) as ArrayBuffer;
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     const ok = await new Promise<boolean>((resolve) => {
       this.pendingLoad = { resolve };
       this.node!.port.postMessage({ type: "load", bytes: buf, sps: this.sps } satisfies MainToWorklet, [buf]);
@@ -134,7 +133,8 @@ export class RealtimePlayer {
     }
   }
 
-  // オフライン全曲レンダリング (波形ピーク計算・WAV書き出し用の検証リファレンス)
+  // オフライン全曲レンダリング (波形ピーク計算・WAV書き出し用の検証リファレンス)。
+  // bytes は convertOggvToPcm 済みの ptcop を渡すこと
   static async renderOffline(bytes: Uint8Array, sps = 44100): Promise<OfflineRenderResult | null> {
     return renderOffline(bytes, sps);
   }

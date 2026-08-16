@@ -1,10 +1,12 @@
 // オフライン全曲レンダリング (1 周分・ループなし・音量 1.0)
 // AudioWorklet リアルタイム再生との整合性検証リファレンス
+//
+// 注: bytes は呼び出し側で convertOggvToPcm() 済みの ptcop を渡すこと
+// (変換の実行はここでは行わない。呼び出し側で 1 回だけ行う)
 
 import { Service } from "../src/service.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
-import { convertOggvToPcm } from "../src/oggv.js";
 
 export interface OfflineRenderResult {
   data: Int16Array;
@@ -12,11 +14,9 @@ export interface OfflineRenderResult {
 }
 
 export async function renderOffline(bytes: Uint8Array, sps = 44100, chunk = 44100): Promise<OfflineRenderResult | null> {
-  // OGGV ボイスはデコード済み PCM 化した ptcop に変換してからレンダリングする
-  const src = (await convertOggvToPcm(bytes)) ?? bytes;
   const s = new Service();
   if (s.init() !== PxtnErr.OK) return null;
-  const io = new MemoryIo(src);
+  const io = new MemoryIo(bytes);
   if (s.read(io) !== PxtnErr.OK) return null;
   if (s.tonesReady() !== PxtnErr.OK) return null;
   s.setDestinationQuality(2, sps);

@@ -4,6 +4,7 @@
 
 import { RealtimePlayer } from "./realtime-player.js";
 import { renderOffline } from "./offline-render.js";
+import { convertOggvToPcm } from "../src/oggv.js";
 
 const SAMPLE_PATH = "./sample.ptcop";
 const params = new URLSearchParams(location.search);
@@ -158,7 +159,8 @@ async function loadOffline(bytes: Uint8Array, name: string): Promise<void> {
 
   log("レンダリング中...");
   const t0 = performance.now();
-  const off = await renderOffline(bytes, 44100);
+  const src = (await convertOggvToPcm(bytes)) ?? bytes;
+  const off = await renderOffline(src, 44100);
   if (!off) {
     log("レンダリング失敗 (read/準備エラー)");
     return;
@@ -237,7 +239,9 @@ async function loadRealtime(bytes: Uint8Array, name: string): Promise<void> {
     return;
   }
 
-  const ok = await player.load(bytes);
+  // OGGV デコード (PCM 化) はここで 1 回だけ行い、worklet と波形計算の両方に渡す
+  const converted = (await convertOggvToPcm(bytes)) ?? bytes;
+  const ok = await player.load(converted);
   if (!ok) {
     log("読み込み失敗 (worklet)");
     return;
@@ -245,7 +249,7 @@ async function loadRealtime(bytes: Uint8Array, name: string): Promise<void> {
 
   // 波形ピークはオフラインで事前計算 (検証リファレンスと同じコードパス)
   log("波形計算中...");
-  const off = await RealtimePlayer.renderOffline(bytes, player.sampleRate);
+  const off = await RealtimePlayer.renderOffline(converted, player.sampleRate);
   if (off) {
     totalSec = off.totalSample / player.sampleRate;
     drawPeaksToOffscreen(off.data, off.totalSample);
