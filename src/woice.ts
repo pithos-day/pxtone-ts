@@ -37,6 +37,10 @@ import { Oscillator, type PulsePoint } from "./osc.js";
 // PTV 座標波形のキャッシュ長 (サンプル数)。C++ 実装の固定値に合わせる
 const PTV_CACHE_SAMPLE_NUM = 400;
 
+// OGGV マテリアルの構造サイズ (C++ 実装と同一)
+const MATE_OGGV_STRUCT_SIZE = 12; // u16 xxx + u16 basic_key + u32 voice_flags + f32 tuning
+const PXTN_OGGV_HEADER_SIZE = 16; // i32 ch + i32 sps + i32 smp_num + i32 size
+
 export enum WoiceType {
   None = 0,
   PCM,
@@ -840,12 +844,11 @@ export class Woice {
 
   // ---- OGGV ----
 
-  // 12byte mate (xxx/basic_key/voice_flags/tuning) + 16byte pxtn ヘッダ (ch/sps/smp_num/size) + 生 ogg
   ioMateOggvW(io: MemoryIo): boolean {
     const vc = this._voices[0]!;
     if (!vc.oggv) return false;
-    const oggvSize = 16 + vc.oggv.data.length;
-    ioPutUint32LE(io, 12 + oggvSize);
+    const oggvBlockBytes = PXTN_OGGV_HEADER_SIZE + vc.oggv.data.length;
+    ioPutUint32LE(io, MATE_OGGV_STRUCT_SIZE + oggvBlockBytes);
     ioPutU16LE(io, 0); // xxx (ch のダミー)
     ioPutU16LE(io, vc.basicKey & 0xffff);
     ioPutUint32LE(io, vc.voiceFlags);
