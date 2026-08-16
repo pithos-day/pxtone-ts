@@ -2,6 +2,7 @@
 // 音色データ + PCM キャッシュ変換
 
 import { PxtnErr } from "./error.js";
+import type { OggvDecoder, OggvDecoded } from "./oggv.js";
 import {
   MemoryIo,
   SEEK_CUR,
@@ -81,6 +82,10 @@ export interface VoiceUnit {
   ptn: Noise;
   wave: { num: number; reso: number; points: PulsePoint[] };
   envelope: VoiceEnvelope;
+  // OGGV: 生 ogg データ (ptcop 内の表現)。デコード後も保存用に保持する
+  oggv: { ch: number; sps: number; smpNum: number; data: Uint8Array } | null;
+  // OGGV が decodeOggv() で PCM 化済みか
+  oggvDecoded: boolean;
 }
 
 export interface VoiceInstance {
@@ -110,6 +115,8 @@ function newVoiceUnit(): VoiceUnit {
     ptn: new Noise(),
     wave: { num: 0, reso: 0, points: [] },
     envelope: { fps: 0, headNum: 0, bodyNum: 0, tailNum: 0, points: [] },
+    oggv: null,
+    oggvDecoded: false,
   };
 }
 
@@ -244,6 +251,8 @@ export class Woice {
         points: s.envelope.points.map((p) => ({ ...p })),
       };
       d.wave = { num: s.wave.num, reso: s.wave.reso, points: s.wave.points.map((p) => ({ ...p })) };
+      d.oggv = s.oggv ? { ...s.oggv, data: new Uint8Array(s.oggv.data) } : null;
+      d.oggvDecoded = s.oggvDecoded;
       if (!d.pcm.copyFrom(s.pcm)) return false;
       if (!d.ptn.copyFrom(s.ptn)) return false;
     }
@@ -279,7 +288,8 @@ export class Woice {
         break;
       }
       case WoiceType.OGGV:
-        return PxtnErr.OGG_NO_SUPPORTED;
+        res = this.ioMateOggvR(io);
+        break;
       default:
         return PxtnErr.VOID;
     }
@@ -336,7 +346,10 @@ export class Woice {
       const vi = this._voinsts[v]!;
       const vc = this._voices[v]!;
       switch (vc.type) {
-        case VoiceType.Sampling: {
+        case VoiceType.Sampling:
+        case VoiceType.OggVorbis: {
+          // OGGV は decodeOggv() で PCM 化済みである必要がある
+          if (vc.type === VoiceType.OggVorbis && !vc.oggvDecoded) return PxtnErr.OGG_NO_SUPPORTED;
           if (!pcmWork.copyFrom(vc.pcm)) return PxtnErr.PCM_UNKNOWN;
           if (!pcmWork.convert(ch, sps, bps)) return PxtnErr.PCM_CONVERT;
           vi.smpHeadW = pcmWork.smpHead;
@@ -822,6 +835,98 @@ export class Woice {
     if (res !== PxtnErr.OK) return res;
     if (x3xTuning !== 1.0) this._x3xTuning = x3xTuning;
     else this._x3xTuning = 0;
+    return PxtnErr.OK;
+  }
+
+  // ---- OGGV ----
+
+  // 12byte mate (xxx/basic_key/voice_flags/tuning) + 16byte pxtn ヘッダ (ch/sps/smp_num/size) + 生 ogg
+  ioMateOggvW(io: MemoryIo): boolean {
+    const vc = this._voices[0]!;
+    if (!vc.oggv) return false;
+    const oggvSize = 16 + vc.oggv.data.length;
+    ioPutUint32LE(io, 12 + oggvSize);
+    ioPutU16LE(io, 0); // xxx (ch のダミー)
+    ioPutU16LE(io, vc.basicKey & 0xffff);
+    ioPutUint32LE(io, vc.voiceFlags);
+    ioPutFloatLE(io, vc.tuning);
+    ioPutInt32LE(io, vc.oggv.ch);
+    ioPutInt32LE(io, vc.oggv.sps);
+    ioPutInt32LE(io, vc.oggv.smpNum);
+    ioPutInt32LE(io, vc.oggv.data.length);
+    io.write(vc.oggv.data, 1, vc.oggv.data.length);
+    return true;
+  }
+
+  ioMateOggvR(io: MemoryIo): PxtnErr {
+    const size = ioGetUint32LE(io);
+    if (size === null) return PxtnErr.DESC_R;
+    void size;
+    const xxx = ioGetUint16LE(io);
+    if (xxx === null) return PxtnErr.DESC_R;
+    void xxx;
+    const basicKey = ioGetUint16LE(io);
+    if (basicKey === null) return PxtnErr.DESC_R;
+    const voiceFlags = ioGetUint32LE(io);
+    if (voiceFlags === null) return PxtnErr.DESC_R;
+    if (voiceFlags & PTV_VOICEFLAG_UNCOVERED) return PxtnErr.FMT_UNKNOWN;
+    const tuning = ioGetFloatLE(io);
+    if (tuning === null) return PxtnErr.DESC_R;
+    const ch = ioGetInt32LE(io);
+    const sps = ioGetInt32LE(io);
+    const smpNum = ioGetInt32LE(io);
+    const dataSize = ioGetInt32LE(io);
+    if (ch === null || sps === null || smpNum === null || dataSize === null) return PxtnErr.DESC_R;
+    if (dataSize < 0) return PxtnErr.FMT_UNKNOWN;
+    const data = ioGetBytes(io, dataSize);
+    if (data === null) return PxtnErr.DESC_R;
+    if (!this.voiceAllocate(1)) return PxtnErr.MEMORY;
+    const vc = this._voices[0]!;
+    vc.type = VoiceType.OggVorbis;
+    vc.oggv = { ch, sps, smpNum, data };
+    vc.oggvDecoded = false;
+    vc.voiceFlags = voiceFlags;
+    vc.basicKey = basicKey;
+    vc.tuning = tuning;
+    this._type = WoiceType.OGGV;
+    this._x3xBasicKey = basicKey;
+    this._x3xTuning = 0;
+    return PxtnErr.OK;
+  }
+
+  // OGGV が PCM 化済みか
+  isOggvDecoded(): boolean {
+    const vc = this._voices[0];
+    return vc ? vc.oggvDecoded : false;
+  }
+
+  // 生 ogg をデコードして vc.pcm (16bit PCM) に格納する
+  async decodeOggv(decoder: OggvDecoder): Promise<PxtnErr> {
+    if (this._voiceNum < 1) return PxtnErr.PARAM;
+    const vc = this._voices[0]!;
+    if (vc.type !== VoiceType.OggVorbis || !vc.oggv) return PxtnErr.OGG;
+    let decoded: OggvDecoded;
+    try {
+      decoded = await decoder.decode(vc.oggv.data);
+    } catch {
+      return PxtnErr.OGG;
+    }
+    if (decoded.ch < 1 || decoded.samples.length < 1) return PxtnErr.OGG;
+    const smpNum = decoded.samples[0]!.length;
+    if (!smpNum) return PxtnErr.OGG;
+    const pcm = new Pcm();
+    const res = pcm.create(decoded.ch, decoded.sps, 16, smpNum);
+    if (res !== PxtnErr.OK) return res;
+    const dv = new DataView(pcm.pBuf!.buffer, pcm.pBuf!.byteOffset, pcm.pBuf!.byteLength);
+    for (let i = 0; i < smpNum; i++) {
+      for (let c = 0; c < decoded.ch; c++) {
+        const s = decoded.samples[c]![i]!;
+        const clamped = s > 1 ? 1 : s < -1 ? -1 : s;
+        dv.setInt16((i * decoded.ch + c) * 2, Math.trunc(clamped * 32767), true);
+      }
+    }
+    vc.pcm = pcm;
+    vc.oggvDecoded = true;
     return PxtnErr.OK;
   }
 }

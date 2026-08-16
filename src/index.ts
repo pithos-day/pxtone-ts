@@ -99,6 +99,15 @@ export { Unit, type VoiceTone } from "./unit.js";
 // Service (ptcop 読み書き + Moo レンダラー)
 export { Service, type VomitPreparation, pxtnServiceMooCalcSampleNum } from "./service.js";
 
+// OGG Vorbis デコード
+export {
+  WasmOggvDecoder,
+  defaultOggvDecoder,
+  convertOggvToPcm,
+  type OggvDecoder,
+  type OggvDecoded,
+} from "./oggv.js";
+
 // 制限値・ファイルフォーマット定数
 export {
   PXTN_MAX_CHANNEL,

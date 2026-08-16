@@ -41,5 +41,8 @@
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@wasm-audio-decoders/ogg-vorbis": "^0.1.20"
   }
 }

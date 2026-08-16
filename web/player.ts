@@ -158,7 +158,7 @@ async function loadOffline(bytes: Uint8Array, name: string): Promise<void> {
 
   log("レンダリング中...");
   const t0 = performance.now();
-  const off = renderOffline(bytes, 44100);
+  const off = await renderOffline(bytes, 44100);
   if (!off) {
     log("レンダリング失敗 (read/準備エラー)");
     return;
@@ -245,7 +245,7 @@ async function loadRealtime(bytes: Uint8Array, name: string): Promise<void> {
 
   // 波形ピークはオフラインで事前計算 (検証リファレンスと同じコードパス)
   log("波形計算中...");
-  const off = RealtimePlayer.renderOffline(bytes, player.sampleRate);
+  const off = await RealtimePlayer.renderOffline(bytes, player.sampleRate);
   if (off) {
     totalSec = off.totalSample / player.sampleRate;
     drawPeaksToOffscreen(off.data, off.totalSample);

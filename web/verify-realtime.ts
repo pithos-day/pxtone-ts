@@ -87,7 +87,7 @@ async function main(): Promise<void> {
       continue;
     }
     const ab = await res.arrayBuffer();
-    const offline = renderOffline(new Uint8Array(ab.slice(0)), SPS);
+    const offline = await renderOffline(new Uint8Array(ab.slice(0)), SPS);
     if (!offline) {
       results.push({ name, ok: false, error: "offline render failed", maxDiff: -1, diffCount: 0, total: 0 });
       setResult();

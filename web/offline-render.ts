@@ -4,16 +4,19 @@
 import { Service } from "../src/service.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
+import { convertOggvToPcm } from "../src/oggv.js";
 
 export interface OfflineRenderResult {
   data: Int16Array;
   totalSample: number;
 }
 
-export function renderOffline(bytes: Uint8Array, sps = 44100, chunk = 44100): OfflineRenderResult | null {
+export async function renderOffline(bytes: Uint8Array, sps = 44100, chunk = 44100): Promise<OfflineRenderResult | null> {
+  // OGGV ボイスはデコード済み PCM 化した ptcop に変換してからレンダリングする
+  const src = (await convertOggvToPcm(bytes)) ?? bytes;
   const s = new Service();
   if (s.init() !== PxtnErr.OK) return null;
-  const io = new MemoryIo(bytes);
+  const io = new MemoryIo(src);
   if (s.read(io) !== PxtnErr.OK) return null;
   if (s.tonesReady() !== PxtnErr.OK) return null;
   s.setDestinationQuality(2, sps);

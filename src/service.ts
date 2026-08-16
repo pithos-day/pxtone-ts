@@ -2,6 +2,7 @@
 // 注: Moo レンダラーは engine.ts で別途移植する（ここでは管理・IOのみ）
 
 import { PxtnErr } from "./error.js";
+import type { OggvDecoder } from "./oggv.js";
 import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioGetUint16LE, ioGetUint32LE, ioPutAsciiString, ioPutInt32LE, ioPutU16LE, ioPutU8, ioGetFloatLE, int32ToFloat } from "./data.js";
 import { PxtnText } from "./text.js";
 import { Master } from "./master.js";
@@ -324,7 +325,23 @@ export class Service {
     }
     for (let i = 0; i < this._ovdrvNum; i++) this._ovdrvs[i]!.toneReady();
     for (let i = 0; i < this._woiceNum; i++) {
+      // OGGV ボイスは decodeOggvAll() で事前に PCM 化する必要がある
+      if (this._woices[i]!.type === WoiceType.OGGV && !this._woices[i]!.isOggvDecoded()) {
+        return PxtnErr.OGG_NO_SUPPORTED;
+      }
       const res = this._woices[i]!.toneReady(this._ptnBldr, this._dstSps);
+      if (res !== PxtnErr.OK) return res;
+    }
+    return PxtnErr.OK;
+  }
+
+  // 全 OGGV ボイスをデコードして PCM 化する (async)
+  async decodeOggvAll(decoder: OggvDecoder): Promise<PxtnErr> {
+    if (!this._bInit) return PxtnErr.INIT;
+    for (let i = 0; i < this._woiceNum; i++) {
+      const w = this._woices[i]!;
+      if (w.type !== WoiceType.OGGV) continue;
+      const res = await w.decodeOggv(decoder);
       if (res !== PxtnErr.OK) return res;
     }
     return PxtnErr.OK;
@@ -675,7 +692,7 @@ export class Service {
         res = woice.ioMatePtnR(desc);
         break;
       case WoiceType.OGGV:
-        res = PxtnErr.OGG_NO_SUPPORTED;
+        res = woice.ioMateOggvR(desc);
         break;
       default:
         res = PxtnErr.FMT_UNKNOWN;
@@ -799,8 +816,11 @@ export class Service {
           if (res !== PxtnErr.OK) return res;
           break;
         }
-        case Tag.MateOggv:
-          return PxtnErr.OGG_NO_SUPPORTED;
+        case Tag.MateOggv: {
+          const res = this._ioReadWoice(desc, WoiceType.OGGV);
+          if (res !== PxtnErr.OK) return res;
+          break;
+        }
         case Tag.EffeDela: {
           const res = this._ioReadDelay(desc);
           if (res !== PxtnErr.OK) return res;
@@ -1030,7 +1050,15 @@ export class Service {
           if (!woice.ioMatePtnW(desc)) return PxtnErr.DESC_W;
           break;
         case WoiceType.OGGV:
-          return PxtnErr.OGG_NO_SUPPORTED;
+          // デコード済み OGGV は PCM として保存 (変換済み ptcop の生成に使用)
+          if (woice.isOggvDecoded()) {
+            ioPutAsciiString(desc, CODE_MATEPCM);
+            if (!woice.ioMatePcmW(desc)) return PxtnErr.DESC_W;
+          } else {
+            ioPutAsciiString(desc, CODE_MATEOGGV);
+            if (!woice.ioMateOggvW(desc)) return PxtnErr.DESC_W;
+          }
+          break;
         default:
           return PxtnErr.INV_DATA;
       }
