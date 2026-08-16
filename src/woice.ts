@@ -923,8 +923,8 @@ export class Woice {
     const dv = new DataView(pcm.pBuf!.buffer, pcm.pBuf!.byteOffset, pcm.pBuf!.byteLength);
     for (let i = 0; i < smpNum; i++) {
       for (let c = 0; c < decoded.ch; c++) {
-        const s = decoded.samples[c]![i]!;
-        const clamped = s > 1 ? 1 : s < -1 ? -1 : s;
+        const sampleValue = decoded.samples[c]![i]!;
+        const clamped = Math.max(-1, Math.min(1, sampleValue));
         dv.setInt16((i * decoded.ch + c) * 2, Math.trunc(clamped * 32767), true);
       }
     }
