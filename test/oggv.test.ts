@@ -140,6 +140,23 @@ it("convertOggvToPcm passes through files without OGGV", async () => {
   expect(result).toEqual(bytes);
 });
 
+it("convertOggvToPcm writes the given exeVer to the header", async () => {
+  const bytes = buildOggvPtcop();
+  const converted = await convertOggvToPcm(bytes, 0x9456);
+  expect(converted).not.toBeNull();
+  // ヘッダ: 16 バイトのバージョンコード直後に U16LE で exeVer
+  const dv = new DataView(converted!.buffer, converted!.byteOffset, converted!.byteLength);
+  expect(dv.getUint16(16, true)).toBe(0x9456);
+});
+
+it("convertOggvToPcm defaults exeVer to 0 (backward compatible)", async () => {
+  const bytes = buildOggvPtcop();
+  const converted = await convertOggvToPcm(bytes);
+  expect(converted).not.toBeNull();
+  const dv = new DataView(converted!.buffer, converted!.byteOffset, converted!.byteLength);
+  expect(dv.getUint16(16, true)).toBe(0);
+});
+
 it("reads and plays the real Funeral_March.ptcop (OGGV)", async () => {
   const bytes = new Uint8Array(readFileSync(join(here, "fixtures", "Funeral_March.ptcop")));
   const s = new Service();

@@ -34,7 +34,11 @@ export const defaultOggvDecoder: OggvDecoder = new WasmOggvDecoder();
 // OGGV ボイスを含む ptcop を「デコード済み PCM 化した ptcop」に変換する。
 // OGGV が含まれない場合は入力をそのまま返す。
 // AudioWorklet (fetch 不可) に渡す前に、メインスレッドで実行することを想定。
-export async function convertOggvToPcm(bytes: Uint8Array): Promise<Uint8Array | null> {
+// exeVer: 再シリアライズ時にヘッダへ書き込むエディタバージョン (未指定なら 0)
+export async function convertOggvToPcm(
+  bytes: Uint8Array,
+  exeVer?: number,
+): Promise<Uint8Array | null> {
   const s = new Service();
   if (s.init() !== PxtnErr.OK) return null;
   const io = new MemoryIo(bytes);
@@ -53,7 +57,7 @@ export async function convertOggvToPcm(bytes: Uint8Array): Promise<Uint8Array | 
 
   // デコード済み OGGV は write 時に matePCM として再シリアライズされる
   const out = new MemoryIo();
-  if (s.write(out, false, 0) !== PxtnErr.OK) return null;
+  if (s.write(out, false, exeVer ?? 0) !== PxtnErr.OK) return null;
   out.seek(0, 0);
   return ioGetBytes(out, out.size);
 }
