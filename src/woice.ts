@@ -911,12 +911,12 @@ export class Woice {
     let decoded: OggvDecoded;
     try {
       decoded = await decoder.decode(vc.oggv.data);
-    } catch {
+    } catch (e) {
+      console.error("OGGV decode failed:", e);
       return PxtnErr.OGG;
     }
-    if (decoded.ch < 1 || decoded.samples.length < 1) return PxtnErr.OGG;
-    const smpNum = decoded.samples[0]!.length;
-    if (!smpNum) return PxtnErr.OGG;
+    const smpNum = decoded.samples[0]?.length;
+    if (!decoded.samples.length || !smpNum) return PxtnErr.OGG;
     const pcm = new Pcm();
     const res = pcm.create(decoded.ch, decoded.sps, 16, smpNum);
     if (res !== PxtnErr.OK) return res;
