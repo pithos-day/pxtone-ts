@@ -925,7 +925,8 @@ export class Woice {
       for (let c = 0; c < decoded.ch; c++) {
         const sampleValue = decoded.samples[c]![i]!;
         const clamped = Math.max(-1, Math.min(1, sampleValue));
-        dv.setInt16((i * decoded.ch + c) * 2, Math.trunc(clamped * 32767), true);
+        const sampleIndex = i * decoded.ch + c;
+        dv.setInt16(sampleIndex * 2, Math.trunc(clamped * 32767), true);
       }
     }
     vc.pcm = pcm;
