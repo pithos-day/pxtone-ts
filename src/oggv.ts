@@ -42,7 +42,7 @@ export async function convertOggvToPcm(bytes: Uint8Array): Promise<Uint8Array | 
 
   let hasOggv = false;
   for (let i = 0; i < s.woiceNum; i++) {
-    if (s.woiceGet(i)!.type === WoiceType.OGGV) {
+    if (s.woiceGet(i)?.type === WoiceType.OGGV) {
       hasOggv = true;
       break;
     }
