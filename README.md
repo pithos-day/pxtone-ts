@@ -59,11 +59,7 @@ pnpm test:realtime  # オフライン/オンライン完全一致テスト（chr
 
 ## 依存関係
 
-| パッケージ | ライセンス | 著者 | 備考 |
-|---|---|---|---|
-| [@wasm-audio-decoders/ogg-vorbis](https://github.com/eshaz/wasm-audio-decoders) | MIT | Ethan Halsall | OGG Vorbis WASM デコーダ |
-| [@wasm-audio-decoders/common](https://github.com/eshaz/wasm-audio-decoders) | MIT | Ethan Halsall | 同上の共通モジュール |
-| [codec-parser](https://github.com/eshaz/wasm-audio-decoders) | LGPL-3.0-or-later | Ethan Halsall | OGG コンテナ解析。web ビルド（`web/player.js`）にバンドル済み |
+[@wasm-audio-decoders/ogg-vorbis](https://github.com/eshaz/wasm-audio-decoders)（MIT）を介して LGPL-3.0 の codec-parser を使用。詳細は [LICENSES.md](LICENSES.md) を参照。
 
 ## 謝辞
 
