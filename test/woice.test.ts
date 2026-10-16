@@ -60,3 +60,29 @@ it("toneReady renders 400-sample PTV cache", () => {
   expect(vi.envRelease).toBe(Math.trunc((1000 * 44100) / 60));
   expect(vi.pEnv!.length).toBeGreaterThan(0);
 });
+
+it("interpolates a descending envelope with C++ integer division", () => {
+  const w = new Woice();
+  w.voiceAllocate(1);
+  const vc = w.getVoice(0)!;
+  vc.envelope = {
+    fps: 60,
+    headNum: 3,
+    bodyNum: 0,
+    tailNum: 1,
+    points: [
+      { x: 0, y: 0 },
+      { x: 10, y: 100 }, // 7350 サンプルで 0→100 へ上昇
+      { x: 10, y: 0 }, // 7350 サンプルで 100→0 へ下降
+      { x: 1000, y: 0 },
+    ],
+  };
+  expect(w.toneReadyEnvelope(44100)).toBe(PxtnErr.OK);
+  const env = w.getInstance(0)!.pEnv!;
+  expect(env.length).toBe(14700);
+  expect(env[7350]).toBe(100);
+  // 下降中は start.y + int 除算になり、単純な切り捨てより 1 大きい
+  expect(env[7351]).toBe(100);
+  expect(env[7424]).toBe(99);
+  expect(env[14699]).toBe(1);
+});

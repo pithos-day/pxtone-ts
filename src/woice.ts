@@ -421,7 +421,8 @@ export class Woice {
           }
           if (ei < headCount) {
             const p = pointList[ei]!;
-            vi.pEnv[s] = Math.trunc(startY + ((p.y - startY) * (s - startX)) / (p.x - startX));
+            // C++ は乗算と除算を int で行い、その結果を開始値に加算する
+            vi.pEnv[s] = startY + Math.trunc(((p.y - startY) * (s - startX)) / (p.x - startX));
           } else {
             vi.pEnv[s] = Math.trunc(startY);
           }
