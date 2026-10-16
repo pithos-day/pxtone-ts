@@ -108,3 +108,14 @@ it("matches C++ rect wave boundaries", () => {
   expect(tables[WaveType.Rect16]![26]).toBe(32767);
   expect(tables[WaveType.Rect16]![27]).toBe(-32767);
 });
+
+it("matches C++ triangle wave peak positions", () => {
+  const nb = new NoiseBuilder();
+  expect(nb.init()).toBe(true);
+  // C++ は頂点を int 除算で 110 / 330 の位置に置く
+  const tables = (nb as unknown as { _tables: Int16Array[] })._tables;
+  expect(tables[WaveType.Tri]![109]).toBe(32469);
+  expect(tables[WaveType.Tri]![110]).toBe(32767);
+  expect(tables[WaveType.Tri]![330]).toBe(-32767);
+  expect(tables[WaveType.Tri]![331]).toBe(-32471);
+});

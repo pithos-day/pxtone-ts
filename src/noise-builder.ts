@@ -215,8 +215,9 @@ export class NoiseBuilder {
     {
       const coodi: PulsePoint[] = [
         { x: 0, y: 0 },
-        { x: _smp_num / 4, y: 128 },
-        { x: (_smp_num * 3) / 4, y: -128 },
+        // C++ は頂点座標を int 除算で求める (441/4=110, 441*3/4=330)
+        { x: Math.trunc(_smp_num / 4), y: 128 },
+        { x: Math.trunc((_smp_num * 3) / 4), y: -128 },
         { x: _smp_num, y: 0 },
       ];
       osci.readyGetSample(coodi, 4, 128, _smp_num, _smp_num);
