@@ -77,6 +77,27 @@ it("rejects anti operation tag", () => {
   expect(s.read(io)).toBe(PxtnErr.ANTI_OPERATION);
 });
 
+it("rejects unknown tags while pre-counting events", () => {
+  const s = new Service();
+  expect(s.init()).toBe(PxtnErr.OK);
+  const io = new MemoryIo();
+  ioPutAsciiString(io, "PTCOLLAGE-071119");
+  ioPutU16LE(io, 0);
+  ioPutU16LE(io, 0);
+  ioPutAsciiString(io, "MasterV5");
+  ioPutInt32LE(io, 15);
+  ioPutU16LE(io, 480); // beat_clock
+  ioPutU8(io, 4); // beat_num
+  ioPutFloatLE(io, 120.0); // beat_tempo
+  ioPutInt32LE(io, 0); // clock_repeat
+  ioPutInt32LE(io, 0); // clock_last
+  ioPutAsciiString(io, "ZZZZZZZZ"); // 未知のタグ
+  ioPutInt32LE(io, 0);
+  io.seek(0, 0);
+  // C++ の _pre_count_event は未知タグで fatal を返す
+  expect(s.read(io)).toBe(PxtnErr.FATAL);
+});
+
 it("tune write/read keeps same event data", () => {
   const s = new Service();
   expect(s.init()).toBe(PxtnErr.OK);

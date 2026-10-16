@@ -635,12 +635,28 @@ export class Service {
         case Tag.X1xEven:
         case Tag.X1xEnd:
           return PxtnErr.X1X_IGNORE;
-        default: {
+        // C++ 同様、イベント数に関係しない既知のタグはサイズ分だけ読み飛ばす
+        case Tag.AntiOper:
+        case Tag.NumUnit:
+        case Tag.X3xPxtnUnit:
+        case Tag.MatePcm:
+        case Tag.MatePtv:
+        case Tag.MatePtn:
+        case Tag.MateOggv:
+        case Tag.EffeDela:
+        case Tag.EffeOver:
+        case Tag.TextName:
+        case Tag.TextComm:
+        case Tag.AssiUnit:
+        case Tag.AssiWoice: {
           const size = ioGetInt32LE(desc);
           if (size === null) return PxtnErr.DESC_R;
           if (!desc.seek(SEEK_CUR, size)) return PxtnErr.DESC_R;
           break;
         }
+        // C++ は未知のタグを致命的エラーとして扱う
+        default:
+          return PxtnErr.FATAL;
       }
     }
 
