@@ -83,6 +83,14 @@ describe("Delay", () => {
     d.toneIncrement();
     d.toneClear();
   });
+
+  it("computes the delay length with C++ float32 division", () => {
+    const d = new Delay();
+    d.set(DelayUnit.Beat, 16.25, 33, 0);
+    // float32 除算と double 除算で切り捨て結果が変わる境界値 (C++ 実装で確認済み)
+    expect(d.toneReady(4, 0.6211477518081665, 44100)).toBe(PxtnErr.OK);
+    expect((d as unknown as { _smpNum: number })._smpNum).toBe(262145);
+  });
 });
 
 describe("OverDrive", () => {

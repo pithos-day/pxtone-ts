@@ -71,13 +71,15 @@ export class Delay {
       // Math.fround は C++ の float 精度 (24bit 仮数) を再現するために使う
       switch (this._unit) {
         case DelayUnit.Beat:
-          this._smpNum = Math.trunc(Math.fround(Math.fround(sps * 60) / beatTempo) / this._freq);
+          this._smpNum = Math.trunc(Math.fround(Math.fround(Math.fround(sps * 60) / beatTempo) / this._freq));
           break;
         case DelayUnit.Meas:
-          this._smpNum = Math.trunc(Math.fround(Math.fround(Math.fround(sps * 60 * beatNum) / beatTempo)) / this._freq);
+          this._smpNum = Math.trunc(
+            Math.fround(Math.fround(Math.fround(sps * 60 * beatNum) / beatTempo) / this._freq),
+          );
           break;
         case DelayUnit.Second:
-          this._smpNum = Math.trunc(Math.fround(sps / this._freq));
+          this._smpNum = Math.trunc(Math.fround(Math.fround(sps) / this._freq));
           break;
       }
 
