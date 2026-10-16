@@ -1457,11 +1457,11 @@ export class Service {
       const voice = woice.getVoice(v)!;
       let ofsFreq = 0;
       if (voice.voiceFlags & PTV_VOICEFLAG_BEATFIT) {
-        // 1 分あたりのサンプル数 (基準 sps × 60 秒) から BEATFIT のオフセット周波数を求める
+        // BEATFIT のオフセット周波数: (波形サンプル数 × テンポ) / (基準 sps × 60 秒 × チューニング)。
         // C++ は分母分子とも float で計算する
-        ofsFreq = Math.fround(
-          Math.fround(voiceInst.smpBodyW * this._mooBtTempo) / Math.fround(PXTN_BASIC_SPS * 60 * voice.tuning),
-        );
+        const smpBodyAtTempo = Math.fround(voiceInst.smpBodyW * this._mooBtTempo);
+        const basicSmpPerMinute = Math.fround(PXTN_BASIC_SPS * 60 * voice.tuning);
+        ofsFreq = f32Div(smpBodyAtTempo, basicSmpPerMinute);
       } else {
         ofsFreq = Math.fround(this._mooFreq!.get(EVENTDEFAULT_BASICKEY - voice.basicKey) * voice.tuning);
       }
