@@ -250,10 +250,11 @@ export class NoiseBuilder {
     // saw 6
     fillStairs(tbls[WaveType.Saw6]!, _smp_num, [1, 2, 3, 4, 5, 6], [
       _SAMPLING_TOP,
-      _SAMPLING_TOP - (_SAMPLING_TOP * 2) / 5,
+      // C++ は _SAMPLING_TOP*2/5 を int 除算で求める
+      _SAMPLING_TOP - Math.trunc((_SAMPLING_TOP * 2) / 5),
       _SAMPLING_TOP / 5,
       -_SAMPLING_TOP / 5,
-      -_SAMPLING_TOP + (_SAMPLING_TOP * 2) / 5,
+      -_SAMPLING_TOP + Math.trunc((_SAMPLING_TOP * 2) / 5),
       -_SAMPLING_TOP,
     ]);
     // saw 8

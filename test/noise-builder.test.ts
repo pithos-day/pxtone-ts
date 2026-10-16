@@ -119,3 +119,16 @@ it("matches C++ triangle wave peak positions", () => {
   expect(tables[WaveType.Tri]![330]).toBe(-32767);
   expect(tables[WaveType.Tri]![331]).toBe(-32471);
 });
+
+it("matches C++ saw6 wave step values", () => {
+  const nb = new NoiseBuilder();
+  expect(nb.init()).toBe(true);
+  // C++ は _SAMPLING_TOP*2/5 を int 除算するため段値が 19661 / -19661 になる
+  const tables = (nb as unknown as { _tables: Int16Array[] })._tables;
+  expect(tables[WaveType.Saw6]![73]).toBe(19661);
+  expect(tables[WaveType.Saw6]![146]).toBe(19661);
+  expect(tables[WaveType.Saw6]![147]).toBe(6553);
+  expect(tables[WaveType.Saw6]![220]).toBe(-6553);
+  expect(tables[WaveType.Saw6]![293]).toBe(-6553);
+  expect(tables[WaveType.Saw6]![294]).toBe(-19661);
+});
