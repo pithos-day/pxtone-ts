@@ -1126,13 +1126,14 @@ export class Service {
 
   mooGetNowClock(): number {
     if (!this._bInit) return 0;
-    if (this._mooClockRate) return Math.trunc(this._mooSmpCount / this._mooClockRate);
+    // C++ は int を float へ変換してから float 除算する
+    if (this._mooClockRate) return Math.trunc(Math.fround(Math.fround(this._mooSmpCount) / this._mooClockRate));
     return 0;
   }
 
   mooGetEndClock(): number {
     if (!this._bInit) return 0;
-    if (this._mooClockRate) return Math.trunc(this._mooSmpEnd / this._mooClockRate);
+    if (this._mooClockRate) return Math.trunc(Math.fround(Math.fround(this._mooSmpEnd) / this._mooClockRate));
     return 0;
   }
 
@@ -1307,7 +1308,7 @@ export class Service {
     // envelope..
     for (let u = 0; u < this._unitNum; u++) this._units[u]!.toneEnvelope();
 
-    const clock = Math.trunc(this._mooSmpCount / this._mooClockRate);
+    const clock = Math.trunc(Math.fround(Math.fround(this._mooSmpCount) / this._mooClockRate));
     const records = this._mooRecords;
 
     // events..

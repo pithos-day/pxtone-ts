@@ -105,3 +105,32 @@ it("loops back to repeat point", () => {
   expect(s2.Moo(buf, 88200 + 1000)).toBe(true);
   expect(s2.mooIsEndVomit()).toBe(false);
 });
+
+it("converts sample counts to float when computing the current clock", () => {
+  const s = buildService(480);
+  expect(s.evels.recordAddI(0, 0, EventKind.ON, 480)).toBe(true);
+  expect(s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY)).toBe(true);
+  const io = new MemoryIo();
+  expect(s.write(io, false, 0)).toBe(PxtnErr.OK);
+  const s2 = new Service();
+  expect(s2.initCollage(4096)).toBe(PxtnErr.OK);
+  io.seek(0, 0);
+  expect(s2.read(io)).toBe(PxtnErr.OK);
+  expect(s2.tonesReady()).toBe(PxtnErr.OK);
+  s2.setDestinationQuality(2, 44100);
+  // clock rate = 45.9375。C++ はサンプル数を float 化してから除算するため、
+  // 16777247 は 16777248 として扱われ 365219 クロックになる (double 除算なら 365218)
+  expect(
+    s2.mooPreparation({
+      startPosMeas: 0,
+      startPosSample: 16777247,
+      startPosFloat: 0,
+      measEnd: 0,
+      measRepeat: 0,
+      fadeinSec: 0,
+      flags: 0,
+      masterVolume: 1,
+    }),
+  ).toBe(true);
+  expect(s2.mooGetNowClock()).toBe(365219);
+});
