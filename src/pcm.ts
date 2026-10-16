@@ -188,7 +188,8 @@ export class Pcm {
       work = new Uint8Array(sampleSize / 2);
       for (let a = 0, b = 0; a < sampleSize; a += 2, b++) {
         let temp1 = i16At(src, a);
-        temp1 = (temp1 / 0x100) + 128;
+        // C++ は int 同士の除算 (0 方向へ切り捨て) でスケールダウンする
+        temp1 = Math.trunc(temp1 / 0x100) + 128;
         work[b] = temp1 & 0xff;
       }
     } else if (newBps === 16) {

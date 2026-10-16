@@ -92,6 +92,17 @@ it("16bit->8bit halves and centers", () => {
   expect(p.pBuf![0]).toBe(131);
 });
 
+it("16bit->8bit truncates negative samples toward zero", () => {
+  const p = new Pcm();
+  p.create(1, 44100, 16, 3);
+  const dv = new DataView(p.pBuf!.buffer);
+  dv.setInt16(0, -32767, true); // -32767/0x100 = -127.99.. → -127 → +128 = 1
+  dv.setInt16(2, -128, true); // -128/0x100 = -0.5 → 0 → +128 = 128
+  dv.setInt16(4, -32768, true); // -128 → +128 = 0
+  expect(p.convertBitPerSample(8)).toBe(true);
+  expect(Array.from(p.pBuf!)).toEqual([1, 128, 0]);
+});
+
 it("converts sample rate with nearest neighbor", () => {
   const p = makePcm();
   expect(p.convertSamplePerSecond(22050)).toBe(true);
