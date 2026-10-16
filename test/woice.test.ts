@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { MemoryIo } from "../src/data.js";
+import { MemoryIo, ioPutFloatLE, ioPutInt32LE, ioPutU16LE, ioPutUint32LE } from "../src/data.js";
 import { Woice, WoiceType, VoiceType, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
 import { PxtnErr } from "../src/error.js";
 import { makePcmWoice, makePtvWoice } from "./helpers.js";
@@ -49,6 +49,30 @@ it("matePCM round trips", () => {
   expect(vc2.pcm.smpBody).toBe(8);
   expect(vc2.pcm.pBuf).toEqual(p.pBuf);
   expect(vc2.voiceFlags).toBe(PTV_VOICEFLAG_WAVELOOP);
+});
+
+it("reads matePCM data whose size is not frame aligned", () => {
+  const io = new MemoryIo();
+  ioPutInt32LE(io, 24 + 5); // size
+  ioPutU16LE(io, 0); // x3x_unit_no
+  ioPutU16LE(io, 60); // basic_key
+  ioPutUint32LE(io, 0); // voice_flags
+  ioPutU16LE(io, 1); // ch
+  ioPutU16LE(io, 16); // bps
+  ioPutUint32LE(io, 44100); // sps
+  ioPutFloatLE(io, 1.0); // tuning
+  ioPutUint32LE(io, 5); // data_size (2 フレーム + 1 バイト)
+  io.write(new Uint8Array([0x11, 0x22, 0x33, 0x44, 0x55]), 1, 5);
+  io.seek(0, 0);
+  const w = new Woice();
+  expect(w.ioMatePcmR(io)).toBe(PxtnErr.OK);
+  expect(w.type).toBe(WoiceType.PCM);
+  const vc = w.getVoice(0)!;
+  expect(vc.pcm.smpBody).toBe(2);
+  // C++ 同様、フレームに収まらない末尾の 1 バイトはバッファに入れない
+  expect(Array.from(vc.pcm.pBuf!)).toEqual([0x11, 0x22, 0x33, 0x44]);
+  // データ本体はストリームからすべて消費される
+  expect(io.position).toBe(4 + 24 + 5);
 });
 
 it("toneReady renders 400-sample PTV cache", () => {

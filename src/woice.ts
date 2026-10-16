@@ -742,7 +742,9 @@ export class Woice {
       this.voiceRelease();
       return PxtnErr.DESC_R;
     }
-    vc.pcm.pBuf!.set(buf);
+    // C++ は data_size バイトを読み込むが、バッファはフレーム単位でしか確保されない。
+    // はみ出した分はバッファ外なので、収まる分だけコピーする
+    vc.pcm.pBuf!.set(buf.subarray(0, Math.min(buf.length, vc.pcm.pBuf!.length)));
     this._type = WoiceType.PCM;
     vc.voiceFlags = voiceFlags;
     vc.basicKey = basicKey;
