@@ -406,9 +406,11 @@ export class Woice {
         let offset = 0;
         let headCount = 0;
         for (let e = 0; e < enve.headNum; e++) {
-          if (!e || enve.points[e]!.x || enve.points[e]!.y) {
-            offset += Math.trunc((enve.points[e]!.x * sps) / enve.fps);
-            headPoints[e] = { x: offset, y: enve.points[e]!.y };
+          const point = enve.points[e]!;
+          const isKept = e === 0 || point.x !== 0 || point.y !== 0; // 先頭点は常に保持、以降は非ゼロ点のみ
+          if (isKept) {
+            offset += Math.trunc((point.x * sps) / enve.fps);
+            headPoints[e] = { x: offset, y: point.y };
             headCount++;
           }
         }
