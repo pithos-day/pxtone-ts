@@ -2,6 +2,11 @@ import { it, expect } from "vitest";
 import { Noise, WaveType } from "../src/noise.js";
 import { NoiseBuilder } from "../src/noise-builder.js";
 
+// init 後の内部波形テーブル (ビルド結果) を取り出す
+function tablesOf(nb: NoiseBuilder): Int16Array[] {
+  return (nb as unknown as { _tables: Int16Array[] })._tables;
+}
+
 function buildSineNoise(): Noise {
   const n = new Noise();
   n.allocate(1, 2);
@@ -98,7 +103,7 @@ it("matches C++ rect wave boundaries", () => {
   const nb = new NoiseBuilder();
   expect(nb.init()).toBe(true);
   // C++ の int 除算では 441/2=220, 441/4=110, 441/8=55, 441/16=27 の位置から負値になる
-  const tables = (nb as unknown as { _tables: Int16Array[] })._tables;
+  const tables = tablesOf(nb);
   expect(tables[WaveType.Rect]![219]).toBe(32767);
   expect(tables[WaveType.Rect]![220]).toBe(-32767);
   expect(tables[WaveType.Rect4]![109]).toBe(32767);
@@ -113,7 +118,7 @@ it("matches C++ triangle wave peak positions", () => {
   const nb = new NoiseBuilder();
   expect(nb.init()).toBe(true);
   // C++ は頂点を int 除算で 110 / 330 の位置に置く
-  const tables = (nb as unknown as { _tables: Int16Array[] })._tables;
+  const tables = tablesOf(nb);
   expect(tables[WaveType.Tri]![109]).toBe(32469);
   expect(tables[WaveType.Tri]![110]).toBe(32767);
   expect(tables[WaveType.Tri]![330]).toBe(-32767);
@@ -124,7 +129,7 @@ it("matches C++ saw6 wave step values", () => {
   const nb = new NoiseBuilder();
   expect(nb.init()).toBe(true);
   // C++ は _SAMPLING_TOP*2/5 を int 除算するため段値が 19661 / -19661 になる
-  const tables = (nb as unknown as { _tables: Int16Array[] })._tables;
+  const tables = tablesOf(nb);
   expect(tables[WaveType.Saw6]![73]).toBe(19661);
   expect(tables[WaveType.Saw6]![146]).toBe(19661);
   expect(tables[WaveType.Saw6]![147]).toBe(6553);
