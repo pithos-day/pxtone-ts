@@ -315,7 +315,8 @@ export class Noise {
         dst.main = { ...s.main };
         dst.pan = s.pan;
         dst.volu = { ...s.volu };
-        dst.enves = s.enves.slice();
+        // C++ 同様、点オブジェクトは共有せず値ごと複製する
+        dst.enves = s.enves.map((p) => ({ ...p }));
       }
     }
     return true;

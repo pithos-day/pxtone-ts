@@ -71,3 +71,12 @@ it("fix clamps out-of-range values", () => {
   expect(u.main.offset).toBe(100);
   expect(u.pan).toBe(100);
 });
+
+it("copyFrom copies envelope points by value", () => {
+  const src = makeNoise();
+  const dst = new Noise();
+  expect(dst.copyFrom(src)).toBe(true);
+  // C++ 同様、コピー元の点を後から書き換えてもコピー先に影響しない
+  src.getUnit(0)!.enves[0]!.x = 999;
+  expect(dst.getUnit(0)!.enves[0]!.x).toBe(0);
+});
