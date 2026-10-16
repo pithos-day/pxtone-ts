@@ -6,6 +6,24 @@ import { WoiceType } from "../src/woice.js";
 import { EventKind, EVENTDEFAULT_KEY } from "../src/event.js";
 import { makePtvWoice } from "./helpers.js";
 
+// V5 プロジェクトの先頭 (ファイル ID + exe バージョン + 予約領域) を書き込む
+function putV5ProjectHeader(io: MemoryIo): void {
+  ioPutAsciiString(io, "PTCOLLAGE-071119");
+  ioPutU16LE(io, 0); // exe_ver
+  ioPutU16LE(io, 0); // reserved
+}
+
+// 最小の MasterV5 チャンクを書き込む
+function putMasterV5(io: MemoryIo, options: { beatClock?: number } = {}): void {
+  ioPutAsciiString(io, "MasterV5");
+  ioPutInt32LE(io, 15); // size
+  ioPutU16LE(io, options.beatClock ?? 480); // beat_clock
+  ioPutU8(io, 4); // beat_num
+  ioPutFloatLE(io, 120.0); // beat_tempo
+  ioPutInt32LE(io, 0); // clock_repeat
+  ioPutInt32LE(io, 0); // clock_last
+}
+
 it("v5 project round trips through write/read", () => {
   const s = new Service();
   expect(s.initCollage(4096)).toBe(PxtnErr.OK);
@@ -59,16 +77,8 @@ it("rejects anti operation tag", () => {
   const s = new Service();
   expect(s.init()).toBe(PxtnErr.OK);
   const io = new MemoryIo();
-  ioPutAsciiString(io, "PTCOLLAGE-071119");
-  ioPutU16LE(io, 0);
-  ioPutU16LE(io, 0);
-  ioPutAsciiString(io, "MasterV5");
-  ioPutInt32LE(io, 15);
-  ioPutU16LE(io, 480); // beat_clock
-  ioPutU8(io, 4); // beat_num
-  ioPutFloatLE(io, 120.0); // beat_tempo
-  ioPutInt32LE(io, 0); // clock_repeat
-  ioPutInt32LE(io, 0); // clock_last
+  putV5ProjectHeader(io);
+  putMasterV5(io);
   ioPutAsciiString(io, "antiOPER");
   ioPutInt32LE(io, 0);
   ioPutAsciiString(io, "pxtoneND");
@@ -81,16 +91,8 @@ it("clears partially loaded data when read fails", () => {
   const s = new Service();
   expect(s.initCollage(4096)).toBe(PxtnErr.OK);
   const io = new MemoryIo();
-  ioPutAsciiString(io, "PTCOLLAGE-071119");
-  ioPutU16LE(io, 0);
-  ioPutU16LE(io, 0);
-  ioPutAsciiString(io, "MasterV5");
-  ioPutInt32LE(io, 15);
-  ioPutU16LE(io, 240); // beat_clock (既定値とは異なる)
-  ioPutU8(io, 4); // beat_num
-  ioPutFloatLE(io, 120.0); // beat_tempo
-  ioPutInt32LE(io, 0); // clock_repeat
-  ioPutInt32LE(io, 0); // clock_last
+  putV5ProjectHeader(io);
+  putMasterV5(io, { beatClock: 240 }); // 既定値とは異なる beat_clock
   ioPutAsciiString(io, "num UNIT");
   ioPutInt32LE(io, 4);
   ioPutU16LE(io, 4096); // unit 数の上限を超えており FMT_NEW になる
@@ -108,16 +110,8 @@ it("rejects unknown tags while pre-counting events", () => {
   const s = new Service();
   expect(s.init()).toBe(PxtnErr.OK);
   const io = new MemoryIo();
-  ioPutAsciiString(io, "PTCOLLAGE-071119");
-  ioPutU16LE(io, 0);
-  ioPutU16LE(io, 0);
-  ioPutAsciiString(io, "MasterV5");
-  ioPutInt32LE(io, 15);
-  ioPutU16LE(io, 480); // beat_clock
-  ioPutU8(io, 4); // beat_num
-  ioPutFloatLE(io, 120.0); // beat_tempo
-  ioPutInt32LE(io, 0); // clock_repeat
-  ioPutInt32LE(io, 0); // clock_last
+  putV5ProjectHeader(io);
+  putMasterV5(io);
   ioPutAsciiString(io, "ZZZZZZZZ"); // 未知のタグ
   ioPutInt32LE(io, 0);
   io.seek(0, 0);
