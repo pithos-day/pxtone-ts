@@ -79,7 +79,10 @@ function clampAndScale(work: number): number {
 
 // ランダム系オシレータの現在値 (Saw: ランダム補間 / Rect: 区間先頭の値)
 function sampleRandom(osc: _Oscillator): number {
-  if (osc.ranType === _RandomType.Saw) return osc.rdmStart + (osc.rdmMargin * truncToZero(osc.offset)) / _smp_num;
+  // C++ は rdm_margin * (int32_t)offset を int で積算してから _smp_num で割る
+  if (osc.ranType === _RandomType.Saw) {
+    return osc.rdmStart + Math.trunc((osc.rdmMargin * truncToZero(osc.offset)) / _smp_num);
+  }
   return osc.rdmStart;
 }
 
@@ -357,7 +360,8 @@ export class NoiseBuilder {
         // freq (C++ 互換: main と違い負 offset ガードなし。volu と同じ扱い)
         const freqOsc = dstUnit.freq;
         const fre = freqOsc.ranType === _RandomType.None
-          ? (_KEY_TOP * freqOsc.pSmp![truncToZero(freqOsc.offset)]!) / _SAMPLING_TOP
+          // C++ は _KEY_TOP * サンプル値を int で積算してから _SAMPLING_TOP で割る
+          ? Math.trunc((_KEY_TOP * freqOsc.pSmp![truncToZero(freqOsc.offset)]!) / _SAMPLING_TOP)
           : sampleRandom(freqOsc);
         let freqSample = fre;
         if (freqOsc.bReverse) freqSample *= -1;

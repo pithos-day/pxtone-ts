@@ -69,3 +69,27 @@ it("8bit build centers around 128", () => {
   expect(hi).toBeGreaterThanOrEqual(190);
   expect(lo).toBeLessThanOrEqual(66);
 });
+
+it("matches C++ integer division in random oscillators", () => {
+  const nb = new NoiseBuilder();
+  expect(nb.init()).toBe(true);
+  const n = new Noise();
+  n.setSmpNum44k(882);
+  n.allocate(1, 1);
+  const u = n.getUnit(0)!;
+  u.bEnable = true;
+  u.pan = 0;
+  u.enves = [{ x: 0, y: 100 }];
+  u.main = { type: WaveType.Random, freq: 44100, volume: 100, offset: 0, bRev: false };
+  u.freq = { type: WaveType.Random, freq: 44100, volume: 100, offset: 0, bRev: false };
+  u.volu = { type: WaveType.None, freq: 0, volume: 0, offset: 0, bRev: false };
+  const pcm = nb.buildNoise(n, 1, 44100, 16)!;
+  const dv = new DataView(pcm.pBuf!.buffer);
+  // C++ 実装 (pxtnPulse_NoiseBuilder) の出力値
+  const expected = [
+    0, -6554, -6124, -5675, 2056, -4370, -4086, -3801, -3078, -2355, -2418, -2617, -2691, -2764, -2785, -2806,
+  ];
+  for (let i = 0; i < expected.length; i++) {
+    expect(dv.getInt16(i * 2, true), `i=${i}`).toBe(expected[i]);
+  }
+});
