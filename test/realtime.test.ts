@@ -71,6 +71,15 @@ function startServer(): Promise<{ port: number; waitResult: (timeoutMs: number) 
 }
 
 beforeAll(async () => {
+  // バンドル未生成のまま実行すると結果が POST されず 10 分待ってしまうため、先に確認する
+  const missing = ["verify-realtime.js", "player-worklet.js"].filter(
+    (name) => !existsSync(join(webDir, name)),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `web バンドルが見つかりません (${missing.join(", ")})。先に "pnpm build:web" を実行してください。`,
+    );
+  }
   mkdirSync(fixturesDst, { recursive: true });
   for (const f of SONGS) {
     cpSync(join(fixturesSrc, f), join(fixturesDst, f));
