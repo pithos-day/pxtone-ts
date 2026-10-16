@@ -17,7 +17,7 @@
   ],
   "type": "module",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/realtime.test.ts\"",
     "test:watch": "vitest",
     "test:realtime": "vitest run test/realtime.test.ts",
     "build": "tsup && tsc -p tsconfig.build.json",

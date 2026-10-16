@@ -25,10 +25,10 @@ pnpm dev:web     # http://localhost:8080/ でサーバー起動
 ## テスト・型チェック・ビルド
 
 ```bash
-pnpm test           # vitest（65 テスト）
+pnpm test           # vitest（64 テスト。ブラウザ検証は含まない）
 pnpm typecheck      # tsc --noEmit
 pnpm build          # tsup で dist/ 生成（ESM + CJS + d.ts）
-pnpm test:realtime  # オフライン/オンライン完全一致テスト（chromium ヘッドレス）
+pnpm test:realtime  # 完全一致テスト（要 pnpm build:web、chromium ヘッドレス）
 ```
 
 ## 謝辞
