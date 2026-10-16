@@ -27,8 +27,12 @@
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
-  "author": "",
+  "author": "pithos",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pithos-day/pxtone-ts.git"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
