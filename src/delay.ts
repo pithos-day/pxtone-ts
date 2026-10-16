@@ -71,12 +71,15 @@ export class Delay {
 
       // C++ は int を float に変換してから float 除算するため、f32Div で再現する
       switch (this._unit) {
+        // C++: (int32_t)( sps * 60 / beat_tempo / _freq )
         case DelayUnit.Beat:
           this._smpNum = Math.trunc(f32Div(f32Div(sps * 60, beatTempo), this._freq));
           break;
+        // C++: (int32_t)( sps * 60 * beat_num / beat_tempo / _freq )
         case DelayUnit.Meas:
           this._smpNum = Math.trunc(f32Div(f32Div(sps * 60 * beatNum, beatTempo), this._freq));
           break;
+        // C++: (int32_t)( sps / _freq )
         case DelayUnit.Second:
           this._smpNum = Math.trunc(f32Div(sps, this._freq));
           break;
