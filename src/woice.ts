@@ -400,7 +400,8 @@ export class Woice {
         if (!vi.envSize) vi.envSize = 1;
         vi.pEnv = new Uint8Array(vi.envSize);
         // C++ 同様、変換後の点は元の点と同じ位置に置き、
-        // 削除した点 (先頭以外で x, y が共にゼロ) の位置は {0, 0} のまま残す
+        // 削除した点 (先頭以外で x, y が共にゼロ) の位置は {0, 0} のまま残す。
+        // 走査時は穴も通常の点として読み込まれるため、開始値が {0, 0} にリセットされる
         const headPoints: PulsePoint[] = [];
         for (let e = 0; e < enve.headNum; e++) headPoints.push({ x: 0, y: 0 });
         let offset = 0;
