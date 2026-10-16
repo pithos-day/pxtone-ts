@@ -1340,7 +1340,9 @@ export class Service {
     // events..
     for (; this._mooPEve >= 0 && this._mooPEve < records.length && records[this._mooPEve]!.clock <= clock; this._mooPEve++) {
       const eve = records[this._mooPEve]!;
-      const unit = this._units[eve.unitNo]!;
+      const unit = this._units[eve.unitNo];
+      // C++ は範囲外の unit_no で不正アクセスするため、安全のため読み飛ばす
+      if (!unit) continue;
 
       switch (eve.kind) {
         case EventKind.ON:

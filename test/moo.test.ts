@@ -106,6 +106,33 @@ it("loops back to repeat point", () => {
   expect(s2.mooIsEndVomit()).toBe(false);
 });
 
+it("ignores moo events that reference a missing unit", () => {
+  const s = buildService(480);
+  expect(s.evels.recordAddI(0, 3, EventKind.VOLUME, 100)).toBe(true); // unit 3 は存在しない
+  expect(s.evels.recordAddI(0, 0, EventKind.ON, 480)).toBe(true);
+  expect(s.evels.recordAddI(0, 0, EventKind.KEY, EVENTDEFAULT_KEY)).toBe(true);
+  const io = new MemoryIo();
+  expect(s.write(io, false, 0)).toBe(PxtnErr.OK);
+  const s2 = new Service();
+  expect(s2.initCollage(4096)).toBe(PxtnErr.OK);
+  io.seek(0, 0);
+  expect(s2.read(io)).toBe(PxtnErr.OK);
+  expect(s2.evels.records.some((r) => r.unitNo === 3)).toBe(true);
+  expect(s2.tonesReady()).toBe(PxtnErr.OK);
+  s2.setDestinationQuality(2, 44100);
+  expect(s2.mooPreparation(null)).toBe(true);
+
+  // C++ は範囲外 unit_no で不正アクセスするため、安全のため読み飛ばす
+  const buf = new Int16Array(44100 * 2);
+  expect(s2.Moo(buf, 44100)).toBe(true);
+  let max = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const a = Math.abs(buf[i]!);
+    if (a > max) max = a;
+  }
+  expect(max).toBeGreaterThan(0);
+});
+
 it("converts sample counts to float when computing the current clock", () => {
   const s = buildService(480);
   expect(s.evels.recordAddI(0, 0, EventKind.ON, 480)).toBe(true);
