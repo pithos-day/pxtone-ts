@@ -399,14 +399,16 @@ export class Woice {
         vi.envSize = Math.trunc((size * sps) / enve.fps);
         if (!vi.envSize) vi.envSize = 1;
         vi.pEnv = new Uint8Array(vi.envSize);
-        const pointList: PulsePoint[] = [];
+        // C++ 同様、変換後の点は元の点と同じ位置に置き、
+        // 削除した点 (先頭以外で x, y が共にゼロ) の位置は {0, 0} のまま残す
+        const headPoints: PulsePoint[] = [];
+        for (let e = 0; e < enve.headNum; e++) headPoints.push({ x: 0, y: 0 });
         let offset = 0;
         let headCount = 0;
         for (let e = 0; e < enve.headNum; e++) {
-          // 先頭点、または座標が非ゼロの変化点のみを保持する (重複点を除去)
           if (!e || enve.points[e]!.x || enve.points[e]!.y) {
             offset += Math.trunc((enve.points[e]!.x * sps) / enve.fps);
-            pointList.push({ x: offset, y: enve.points[e]!.y });
+            headPoints[e] = { x: offset, y: enve.points[e]!.y };
             headCount++;
           }
         }
@@ -414,13 +416,13 @@ export class Woice {
         let startY = 0;
         let ei = 0;
         for (let s = 0; s < vi.envSize; s++) {
-          while (ei < headCount && s >= pointList[ei]!.x) {
-            startX = pointList[ei]!.x;
-            startY = pointList[ei]!.y;
+          while (ei < headCount && s >= headPoints[ei]!.x) {
+            startX = headPoints[ei]!.x;
+            startY = headPoints[ei]!.y;
             ei++;
           }
           if (ei < headCount) {
-            const p = pointList[ei]!;
+            const p = headPoints[ei]!;
             // C++ は乗算と除算を int で行い、その結果を開始値に加算する
             vi.pEnv[s] = startY + Math.trunc(((p.y - startY) * (s - startX)) / (p.x - startX));
           } else {

@@ -86,3 +86,28 @@ it("interpolates a descending envelope with C++ integer division", () => {
   expect(env[7424]).toBe(99);
   expect(env[14699]).toBe(1);
 });
+
+it("keeps C++ envelope holes for interior zero points", () => {
+  const w = new Woice();
+  w.voiceAllocate(1);
+  const vc = w.getVoice(0)!;
+  vc.envelope = {
+    fps: 60,
+    headNum: 3,
+    bodyNum: 0,
+    tailNum: 1,
+    points: [
+      { x: 0, y: 50 },
+      { x: 0, y: 0 }, // 中間のゼロ点は削除され、変換後の配列には穴 {0,0} が残る
+      { x: 10, y: 100 },
+      { x: 1000, y: 0 },
+    ],
+  };
+  expect(w.toneReadyEnvelope(44100)).toBe(PxtnErr.OK);
+  const env = w.getInstance(0)!.pEnv!;
+  expect(env.length).toBe(7350);
+  // C++ は穴を読んだ時点で開始値が {0,0} にリセットされ、以降は 0 のまま
+  expect(env[0]).toBe(0);
+  expect(env[100]).toBe(0);
+  expect(env[7349]).toBe(0);
+});
