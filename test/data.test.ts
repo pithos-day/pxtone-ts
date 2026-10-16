@@ -55,4 +55,10 @@ describe("varint", () => {
     io.seek(0, 0);
     expect(dataReadV(io)).toBe(null);
   });
+
+  it("rejects a varint whose 5 bytes all have the continuation bit", () => {
+    const io = new MemoryIo(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80]));
+    io.seek(0, 0);
+    expect(dataReadV(io)).toBe(null);
+  });
 });

@@ -343,6 +343,8 @@ export function dataReadV(io: MemoryIo): number | null {
     a[count] = b;
     if ((b & 0x80) === 0) break;
   }
+  // C++ の _data_r_v と同様、5 バイト全てに継続ビットがある場合は不正データ
+  if (count === 5) return null;
   return vToInt(a, count + 1);
 }
 
