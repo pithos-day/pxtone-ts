@@ -1150,8 +1150,8 @@ export class Service {
 
   mooSetFade(fade: number, sec: number): boolean {
     if (!this._bInit) return false;
-    // フェード長は 8bit 固定小数 (1/256 サンプル単位) で保持する
-    this._mooFadeMax = Math.trunc(this._dstSps * sec) >> 8;
+    // C++ は (float)dst_sps * sec を float で計算してから 8bit 固定小数にする
+    this._mooFadeMax = Math.trunc(Math.fround(this._dstSps * Math.fround(sec))) >> 8;
     if (fade < 0) {
       this._mooFadeDir = -1;
       this._mooFadeCount = this._mooFadeMax << 8;
@@ -1169,7 +1169,8 @@ export class Service {
     if (!this._bInit) return false;
     if (v < 0) v = 0;
     if (v > 1) v = 1;
-    this._mooMasterVol = v;
+    // C++ は float 精度で保持する
+    this._mooMasterVol = Math.fround(v);
     return true;
   }
 
@@ -1215,14 +1216,16 @@ export class Service {
       else this._mooBMuteByUnit = false;
       if (prep.flags & PXTN_VOMIT_PREP_FLAG_LOOP) this._mooBLoop = true;
       else this._mooBLoop = false;
-      this._mooMasterVol = prep.masterVolume;
+      this._mooMasterVol = Math.fround(prep.masterVolume);
     }
 
     this._mooBtClock = this.master.beatClock;
     this._mooBtNum = this.master.beatNum;
     this._mooBtTempo = this.master.beatTempo;
-    this._mooClockRate = (60.0 * this._dstSps) / (this._mooBtTempo * this._mooBtClock);
-    this._mooSmpStride = PXTN_BASIC_SPS / this._dstSps;
+    // C++ は double で計算し float に丸めて保持する
+    this._mooClockRate = Math.fround((60.0 * this._dstSps) / (this._mooBtTempo * this._mooBtClock));
+    // C++ は float 除算 (44100.0f / _dst_sps)
+    this._mooSmpStride = Math.fround(PXTN_BASIC_SPS / this._dstSps);
     this._mooTop = 0x7fff;
     this._mooTimePanIndex = 0;
 
@@ -1252,7 +1255,8 @@ export class Service {
 
   // ON イベント: ノートを発音する。リリース中に次のノートが重なる場合は寿命を制限する
   private _mooHandleOnEvent(unit: Unit, eve: EveRecord, clock: number, records: EveRecord[]): void {
-    const onCount = Math.trunc((eve.clock + eve.value - clock) * this._mooClockRate);
+    // C++ は毎回 float 乗算するため、_mooClockRate との積を float 精度にする
+    const onCount = Math.trunc(Math.fround((eve.clock + eve.value - clock) * this._mooClockRate));
     if (onCount <= 0) {
       unit.toneZeroLives();
       return;
@@ -1266,7 +1270,8 @@ export class Service {
 
       if (voiceInst.envRelease) {
         // リリース中に次のノートが重なる場合、寿命は「このノートの終端+リリース」と「次のONまで」の短い方に制限する
-        const lifeUntilRelease = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate) + voiceInst.envRelease;
+        const lifeUntilRelease =
+          Math.trunc(Math.fround((eve.value - (clock - eve.clock)) * this._mooClockRate)) + voiceInst.envRelease;
         let lifeUntilNextOn: number;
         // このノートの終端+リリースを過ぎた位置にある次の ON を探す
         const releaseEnd = eve.clock + eve.value + tone.envReleaseClock;
@@ -1279,12 +1284,12 @@ export class Service {
             break;
           }
         }
-        if (!next) lifeUntilNextOn = this._mooSmpEnd - Math.trunc(clock * this._mooClockRate);
-        else lifeUntilNextOn = Math.trunc((next.clock - clock) * this._mooClockRate);
+        if (!next) lifeUntilNextOn = this._mooSmpEnd - Math.trunc(Math.fround(clock * this._mooClockRate));
+        else lifeUntilNextOn = Math.trunc(Math.fround((next.clock - clock) * this._mooClockRate));
         if (lifeUntilRelease < lifeUntilNextOn) tone.lifeCount = lifeUntilRelease;
         else tone.lifeCount = lifeUntilNextOn;
       } else {
-        tone.lifeCount = Math.trunc((eve.value - (clock - eve.clock)) * this._mooClockRate);
+        tone.lifeCount = Math.trunc(Math.fround((eve.value - (clock - eve.clock)) * this._mooClockRate));
       }
 
       if (tone.lifeCount > 0) {
@@ -1330,7 +1335,7 @@ export class Service {
           unit.toneVolume(eve.value);
           break;
         case EventKind.PORTAMENT:
-          unit.tonePortament(Math.trunc(eve.value * this._mooClockRate));
+          unit.tonePortament(Math.trunc(Math.fround(eve.value * this._mooClockRate)));
           break;
         // ビート・リピート系イベントは mooPreparation の時点でマスターに反映済みのため無視する
         case EventKind.BEATCLOCK:
@@ -1370,8 +1375,8 @@ export class Service {
       // フェード: count>>8 は 8bit 固定小数の経過位置なので、max で割って 0..1 のゲインにする
       if (this._mooFadeDir) sample = Math.trunc((sample * (this._mooFadeCount >> 8)) / this._mooFadeMax);
 
-      // master volume
-      sample = Math.trunc(sample * this._mooMasterVol);
+      // master volume (C++ は work と float 精度の音量を float 積算する)
+      sample = Math.trunc(Math.fround(Math.fround(sample) * this._mooMasterVol));
 
       // to buffer..
       if (sample > this._mooTop) sample = this._mooTop;
@@ -1386,7 +1391,8 @@ export class Service {
 
     for (let u = 0; u < this._unitNum; u++) {
       const keyNow = this._units[u]!.toneIncrementKey();
-      this._units[u]!.toneIncrementSample(this._mooFreq!.get2(keyNow) * this._mooSmpStride);
+      // C++ はピッチ (float) と _moo_smp_stride (float) の積を float で計算する
+      this._units[u]!.toneIncrementSample(Math.fround(this._mooFreq!.get2(keyNow) * this._mooSmpStride));
     }
 
     // delay
@@ -1422,11 +1428,18 @@ export class Service {
       let ofsFreq = 0;
       if (voice.voiceFlags & PTV_VOICEFLAG_BEATFIT) {
         // 1 分あたりのサンプル数 (基準 sps × 60 秒) から BEATFIT のオフセット周波数を求める
-        ofsFreq = (voiceInst.smpBodyW * this._mooBtTempo) / (PXTN_BASIC_SPS * 60 * voice.tuning);
+        // C++ は分母分子とも float で計算する
+        ofsFreq = Math.fround(
+          Math.fround(voiceInst.smpBodyW * this._mooBtTempo) / Math.fround(PXTN_BASIC_SPS * 60 * voice.tuning),
+        );
       } else {
-        ofsFreq = this._mooFreq!.get(EVENTDEFAULT_BASICKEY - voice.basicKey) * voice.tuning;
+        ofsFreq = Math.fround(this._mooFreq!.get(EVENTDEFAULT_BASICKEY - voice.basicKey) * voice.tuning);
       }
-      unit.toneResetAnd2prm(v, Math.trunc(voiceInst.envRelease / this._mooClockRate), ofsFreq);
+      unit.toneResetAnd2prm(
+        v,
+        Math.trunc(Math.fround(Math.fround(voiceInst.envRelease) / this._mooClockRate)),
+        ofsFreq,
+      );
     }
     return true;
   }
