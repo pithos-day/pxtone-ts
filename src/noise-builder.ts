@@ -185,7 +185,8 @@ export class NoiseBuilder {
     {
       const p = tbls[WaveType.Rect]!;
       let s = 0;
-      for (; s < _smp_num / 2; s++) p[s] = _SAMPLING_TOP;
+      // C++ は int 除算の境界まで正値を出力する
+      for (; s < Math.trunc(_smp_num / 2); s++) p[s] = _SAMPLING_TOP;
       for (; s < _smp_num; s++) p[s] = -_SAMPLING_TOP;
     }
     // random
@@ -232,7 +233,8 @@ export class NoiseBuilder {
     for (const [n, wave] of RECT_WAVES) {
       const p = tbls[wave]!;
       let s = 0;
-      for (; s < _smp_num / n; s++) p[s] = _SAMPLING_TOP;
+      // C++ は int 除算の境界まで正値を出力する
+      for (; s < Math.trunc(_smp_num / n); s++) p[s] = _SAMPLING_TOP;
       for (; s < _smp_num; s++) p[s] = -_SAMPLING_TOP;
     }
     // saw 3
