@@ -4,6 +4,7 @@
 import { PxtnErr } from "./error.js";
 import type { OggvDecoder } from "./oggv.js";
 import { MemoryIo, SEEK_CUR, SEEK_SET, ioGetBytes, ioGetInt32LE, ioGetU16LE, ioGetUint16LE, ioGetUint32LE, ioPutAsciiString, ioPutInt32LE, ioPutU16LE, ioPutU8, ioGetFloatLE, int32ToFloat } from "./data.js";
+import { f32Div, f32Mul } from "./float32.js";
 import { PxtnText } from "./text.js";
 import { Master } from "./master.js";
 import { Evelist, type EveRecord } from "./evelist.js";
@@ -1153,13 +1154,13 @@ export class Service {
   mooGetNowClock(): number {
     if (!this._bInit) return 0;
     // C++ は int を float へ変換してから float 除算する
-    if (this._mooClockRate) return Math.trunc(Math.fround(Math.fround(this._mooSmpCount) / this._mooClockRate));
+    if (this._mooClockRate) return Math.trunc(f32Div(this._mooSmpCount, this._mooClockRate));
     return 0;
   }
 
   mooGetEndClock(): number {
     if (!this._bInit) return 0;
-    if (this._mooClockRate) return Math.trunc(Math.fround(Math.fround(this._mooSmpEnd) / this._mooClockRate));
+    if (this._mooClockRate) return Math.trunc(f32Div(this._mooSmpEnd, this._mooClockRate));
     return 0;
   }
 
@@ -1334,7 +1335,7 @@ export class Service {
     // envelope..
     for (let u = 0; u < this._unitNum; u++) this._units[u]!.toneEnvelope();
 
-    const clock = Math.trunc(Math.fround(Math.fround(this._mooSmpCount) / this._mooClockRate));
+    const clock = Math.trunc(f32Div(this._mooSmpCount, this._mooClockRate));
     const records = this._mooRecords;
 
     // events..
@@ -1405,7 +1406,7 @@ export class Service {
       if (this._mooFadeDir) sample = Math.trunc((sample * (this._mooFadeCount >> 8)) / this._mooFadeMax);
 
       // master volume (C++ は work と float 精度の音量を float 積算する)
-      sample = Math.trunc(Math.fround(Math.fround(sample) * this._mooMasterVol));
+      sample = Math.trunc(f32Mul(sample, this._mooMasterVol));
 
       // to buffer..
       if (sample > this._mooTop) sample = this._mooTop;
@@ -1466,7 +1467,7 @@ export class Service {
       }
       unit.toneResetAnd2prm(
         v,
-        Math.trunc(Math.fround(Math.fround(voiceInst.envRelease) / this._mooClockRate)),
+        Math.trunc(f32Div(voiceInst.envRelease, this._mooClockRate)),
         ofsFreq,
       );
     }

@@ -4,6 +4,7 @@ import { PxtnErr } from "./error.js";
 import { PXTN_MAX_CHANNEL, PXTN_MAX_TUNE_GROUP_NUM } from "./constants.js";
 import type { MemoryIo } from "./data.js";
 import { ioGetFloatLE, ioGetUint16LE, ioPutFloatLE, ioPutUint16LE, ioGetInt32LE, ioPutInt32LE } from "./data.js";
+import { f32Div } from "./float32.js";
 
 export enum DelayUnit {
   Beat = 0,
@@ -68,18 +69,16 @@ export class Delay {
       this._offset = 0;
       this._rateS32 = Math.trunc(this._rate);
 
-      // Math.fround は C++ の float 精度 (24bit 仮数) を再現するために使う
+      // C++ は int を float に変換してから float 除算するため、f32Div で再現する
       switch (this._unit) {
         case DelayUnit.Beat:
-          this._smpNum = Math.trunc(Math.fround(Math.fround(Math.fround(sps * 60) / beatTempo) / this._freq));
+          this._smpNum = Math.trunc(f32Div(f32Div(sps * 60, beatTempo), this._freq));
           break;
         case DelayUnit.Meas:
-          this._smpNum = Math.trunc(
-            Math.fround(Math.fround(Math.fround(sps * 60 * beatNum) / beatTempo) / this._freq),
-          );
+          this._smpNum = Math.trunc(f32Div(f32Div(sps * 60 * beatNum, beatTempo), this._freq));
           break;
         case DelayUnit.Second:
-          this._smpNum = Math.trunc(Math.fround(Math.fround(sps) / this._freq));
+          this._smpNum = Math.trunc(f32Div(sps, this._freq));
           break;
       }
 

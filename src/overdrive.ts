@@ -3,6 +3,7 @@
 import { PxtnErr } from "./error.js";
 import type { MemoryIo } from "./data.js";
 import { ioGetFloatLE, ioGetUint16LE, ioPutFloatLE, ioPutUint16LE, ioGetInt32LE, ioPutInt32LE } from "./data.js";
+import { f32Div } from "./float32.js";
 
 export const TUNEOVERDRIVE_CUT_MAX = 99.9;
 export const TUNEOVERDRIVE_CUT_MIN = 50.0;
@@ -46,8 +47,8 @@ export class OverDrive {
   }
 
   toneReady(): void {
-    // クリップ閾値: cut (50..99.9%) を int16 範囲に換算する。fround は C++ の float 精度再現
-    this._cut16bitTop = Math.trunc(Math.fround(Math.fround(32767 * (100 - this._cutF)) / 100));
+    // クリップ閾値: cut (50..99.9%) を int16 範囲に換算する (C++ の float 演算を再現)
+    this._cut16bitTop = Math.trunc(f32Div(32767 * (100 - this._cutF), 100));
   }
 
   toneSupple(groupSmps: Int32Array): void {
