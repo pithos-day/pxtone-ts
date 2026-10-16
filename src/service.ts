@@ -911,6 +911,16 @@ export class Service {
 
   read(desc: MemoryIo): PxtnErr {
     if (!this._bInit) return PxtnErr.INIT;
+
+    const res = this._readCore(desc);
+
+    // C++ 同様、読み込みに失敗した場合は読みかけの内容を破棄する
+    if (res !== PxtnErr.OK) this.clear();
+
+    return res;
+  }
+
+  private _readCore(desc: MemoryIo): PxtnErr {
     let res: PxtnErr = PxtnErr.OK;
     const fmtVer: { fmt: FmtVer; exeVer: number } = { fmt: FmtVer.Unknown, exeVer: 0 };
     const eventNum = { value: 0 };

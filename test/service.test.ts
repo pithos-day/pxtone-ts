@@ -77,6 +77,33 @@ it("rejects anti operation tag", () => {
   expect(s.read(io)).toBe(PxtnErr.ANTI_OPERATION);
 });
 
+it("clears partially loaded data when read fails", () => {
+  const s = new Service();
+  expect(s.initCollage(4096)).toBe(PxtnErr.OK);
+  const io = new MemoryIo();
+  ioPutAsciiString(io, "PTCOLLAGE-071119");
+  ioPutU16LE(io, 0);
+  ioPutU16LE(io, 0);
+  ioPutAsciiString(io, "MasterV5");
+  ioPutInt32LE(io, 15);
+  ioPutU16LE(io, 240); // beat_clock (既定値とは異なる)
+  ioPutU8(io, 4); // beat_num
+  ioPutFloatLE(io, 120.0); // beat_tempo
+  ioPutInt32LE(io, 0); // clock_repeat
+  ioPutInt32LE(io, 0); // clock_last
+  ioPutAsciiString(io, "num UNIT");
+  ioPutInt32LE(io, 4);
+  ioPutU16LE(io, 4096); // unit 数の上限を超えており FMT_NEW になる
+  ioPutU16LE(io, 0);
+  ioPutAsciiString(io, "pxtoneND");
+  ioPutInt32LE(io, 0);
+  io.seek(0, 0);
+  expect(s.read(io)).toBe(PxtnErr.FMT_NEW);
+  // C++ は失敗時に clear() を通るため、途中まで読んだ master の値も破棄される
+  expect(s.master.beatClock).toBe(480);
+  expect(s.unitNum).toBe(0);
+});
+
 it("rejects unknown tags while pre-counting events", () => {
   const s = new Service();
   expect(s.init()).toBe(PxtnErr.OK);
