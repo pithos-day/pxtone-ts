@@ -70,6 +70,15 @@ function truncToZero(v: number): number {
   return v >= 0 ? Math.floor(v) : Math.ceil(v);
 }
 
+// 本家 C++ はテーブルの境界付近で配列外参照 (未定義動作) になるため、
+// 移植ではすべてのテーブル参照を周期内に折り返した定義済み挙動に統一する。
+// (NaN / Infinity は変換後に 0 参照となり 0 を返す)
+function sampleTable(tbl: Int16Array, idx: number): number {
+  const i = Math.trunc(idx);
+  const len = tbl.length;
+  return tbl[(((i % len) + len) % len)] ?? 0;
+}
+
 // work を [-1, 1] にクランプして int16 サンプル値へ変換する
 function clampAndScale(work: number): number {
   if (work > 1.0) work = 1.0;
@@ -104,8 +113,11 @@ function setOscillator(
   to.pSmp = tbl;
   to.bReverse = from.bRev;
   to.rdmStart = 0;
-  to.rdmIndex = Math.trunc(_smp_num_rand * (from.offset / 100));
-  to.rdmMargin = tblRand[to.rdmIndex]!;
+  // 本家 C++ は offset=100 のとき rdm_index がちょうど _smp_num_rand に達し p_tbl_rand の
+  // 範囲外を 1 要素読む (pxtnPulse_NoiseBuilder.cpp _set_ocsillator; 未定義動作)。
+  // ここでは周期表として 0 に折り返し、オシレータ位相として offset=100 ≡ offset=0 と定義する。
+  to.rdmIndex = ((Math.trunc(_smp_num_rand * (from.offset / 100)) % _smp_num_rand) + _smp_num_rand) % _smp_num_rand;
+  to.rdmMargin = sampleTable(tblRand, to.rdmIndex);
 }
 
 function fillStairs(tbl: Int16Array, smpNum: number, nums: number[], vals: number[]): void {
@@ -329,15 +341,15 @@ export class NoiseBuilder {
           const po = dstUnit.main;
           if (po.ranType === _RandomType.None) {
             const offset = truncToZero(po.offset);
-            work = offset >= 0 ? po.pSmp![offset]! : 0;
+            work = offset >= 0 ? sampleTable(po.pSmp!, offset) : 0;
           } else {
             work = po.offset >= 0 ? sampleRandom(po) : 0;
           }
           if (po.bReverse) work *= -1;
           work *= po.volume;
-          // volu (C++ 互換: main と違い offset の負値ガードがない。負 offset 時は undefined になり得る)
+          // volu (C++ 互換: main と違い offset の負値ガードがない。参照は sampleTable で周期内に折り返す)
           const volOsc = dstUnit.volu;
-          const vol = volOsc.ranType === _RandomType.None ? volOsc.pSmp![truncToZero(volOsc.offset)]! : sampleRandom(volOsc);
+          const vol = volOsc.ranType === _RandomType.None ? sampleTable(volOsc.pSmp!, truncToZero(volOsc.offset)) : sampleRandom(volOsc);
           let volSample = vol;
           if (volOsc.bReverse) volSample *= -1;
           volSample *= volOsc.volume;
@@ -365,7 +377,7 @@ export class NoiseBuilder {
         const freqOsc = dstUnit.freq;
         const fre = freqOsc.ranType === _RandomType.None
           // C++ は _KEY_TOP * サンプル値を int で積算してから _SAMPLING_TOP で割る
-          ? Math.trunc((_KEY_TOP * freqOsc.pSmp![truncToZero(freqOsc.offset)]!) / _SAMPLING_TOP)
+          ? Math.trunc((_KEY_TOP * sampleTable(freqOsc.pSmp!, truncToZero(freqOsc.offset))) / _SAMPLING_TOP)
           : sampleRandom(freqOsc);
         let freqSample = fre;
         if (freqOsc.bReverse) freqSample *= -1;
@@ -406,10 +418,11 @@ export class NoiseBuilder {
       osc.offset -= _smp_num;
       if (osc.offset >= _smp_num) osc.offset = 0;
       if (osc.ranType !== _RandomType.None) {
-        osc.rdmStart = randTable[osc.rdmIndex]!;
+        // rdm_index は初期化時に周期内へ折り返しているため常に範囲内だが、参照は sampleTable で統一する
+        osc.rdmStart = sampleTable(randTable, osc.rdmIndex);
         osc.rdmIndex++;
         if (osc.rdmIndex >= _smp_num_rand) osc.rdmIndex = 0;
-        osc.rdmMargin = randTable[osc.rdmIndex]! - osc.rdmStart;
+        osc.rdmMargin = sampleTable(randTable, osc.rdmIndex) - osc.rdmStart;
       }
     }
   }
