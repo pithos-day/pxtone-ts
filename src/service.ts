@@ -275,6 +275,9 @@ export class Service {
 
     if (!this._mooInit()) return PxtnErr.MOO_INIT;
 
+    // C++ は fix_evels_num 指定時 (initCollage) に _moo_b_valid_data を立てる (pxtnService.cpp:191)
+    if (fixEvelsNum) this._mooBValidData = true;
+
     this._bEdit = bEdit;
     this._bInit = true;
     return PxtnErr.OK;

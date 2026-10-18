@@ -20,6 +20,21 @@ function buildService(beatClock: number): Service {
   return s;
 }
 
+it("initCollage enables moo valid data like C++", () => {
+  // C++ pxtnService.cpp:191 は fix_evels_num 指定時に _moo_b_valid_data = true にする。
+  // 移植はこれが立たず、アプリ側が write+read 往復で回避していた
+  const s = new Service();
+  expect(s.initCollage(4096)).toBe(PxtnErr.OK);
+  expect(s.mooIsValidData()).toBe(true);
+  s.setDestinationQuality(2, 44100);
+  expect(s.mooPreparation(null)).toBe(true);
+
+  // 非編集 init() では C++ 同様に立たない
+  const tune = new Service();
+  expect(tune.init()).toBe(PxtnErr.OK);
+  expect(tune.mooIsValidData()).toBe(false);
+});
+
 it("mooGetTotalSample matches C++ formula", () => {
   expect(pxtnServiceMooCalcSampleNum(1, 4, 44100, 120)).toBe(88200);
   expect(pxtnServiceMooCalcSampleNum(2, 4, 44100, 120)).toBe(176400);
