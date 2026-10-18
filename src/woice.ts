@@ -932,14 +932,25 @@ export class Woice {
     const dv = new DataView(pcm.pBuf!.buffer, pcm.pBuf!.byteOffset, pcm.pBuf!.byteLength);
     for (let i = 0; i < smpNum; i++) {
       for (let c = 0; c < decoded.ch; c++) {
-        const sampleValue = decoded.samples[c]![i]!;
-        const clamped = Math.max(-1, Math.min(1, sampleValue));
         const sampleIndex = i * decoded.ch + c;
-        dv.setInt16(sampleIndex * 2, Math.trunc(clamped * 32767), true);
+        dv.setInt16(sampleIndex * 2, vorbisFtoi(decoded.samples[c]![i]!), true);
       }
     }
     vc.pcm = pcm;
     vc.oggvDecoded = true;
     return PxtnErr.OK;
   }
+}
+
+// libvorbisfile の ov_read 相当の int16 変換。
+// C++ は float 乗算 (*32768.f) した値を最近接整数へ丸める。x86 の fistp / x64 の
+// cvtsd2si はタイを偶数側へ丸めるため、vorbis_ftoi の丸めを再現する。
+// その後に [-32768, 32767] でクランプする (負側は -32768 まで許容)。
+function vorbisFtoi(sample: number): number {
+  const scaled = Math.fround(sample * 32768);
+  const rounded = Math.round(scaled);
+  const nearest = rounded - scaled === 0.5 && (rounded & 1) !== 0 ? rounded - 1 : rounded;
+  if (nearest > 32767) return 32767;
+  if (nearest < -32768) return -32768;
+  return nearest;
 }

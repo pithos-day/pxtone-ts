@@ -103,6 +103,28 @@ it("decodeOggv converts ogg to PCM", async () => {
   expect(nonzero).toBeGreaterThan(100);
 });
 
+it("quantizes decoded samples like libvorbisfile ov_read", async () => {
+  // C++ は float 乗算 *32768.f → 最近接丸め (タイは偶数) → [-32768, 32767] クランプ
+  const source = new Float32Array([
+    0.75, -1.0, 1.0, 0.5, -0.5, 0.0001,
+    1.5 / 32768, 2.5 / 32768, -1.5 / 32768,
+  ]);
+  const decoder = {
+    decode: async () => ({ ch: 1, sps: 44100, samples: [source] }),
+  };
+  const w = new Woice();
+  w.voiceAllocate(1);
+  const vc = w.getVoice(0)!;
+  vc.type = VoiceType.OggVorbis;
+  vc.oggv = { ch: 1, sps: 44100, smpNum: source.length, data: new Uint8Array([0]) };
+  expect(await w.decodeOggv(decoder)).toBe(PxtnErr.OK);
+  const dv = new DataView(vc.pcm.pBuf!.buffer, vc.pcm.pBuf!.byteOffset);
+  const expected = [24576, -32768, 32767, 16384, -16384, 3, 2, 2, -2];
+  for (let i = 0; i < expected.length; i++) {
+    expect(dv.getInt16(i * 2, true), `i=${i}`).toBe(expected[i]);
+  }
+});
+
 it("convertOggvToPcm produces a playable PCM-based ptcop", async () => {
   const bytes = buildOggvPtcop();
   const converted = await convertOggvToPcm(bytes);
