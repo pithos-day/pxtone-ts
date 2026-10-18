@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { Unit } from "../src/unit.js";
 import { Woice, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
 import { PxtnErr } from "../src/error.js";
-import { MemoryIo, ioPutInt32LE, ioPutU16LE } from "../src/data.js";
+import { MemoryIo, ioPutAsciiString, ioPutInt32LE, ioPutU16LE } from "../src/data.js";
 import { EVENTDEFAULT_KEY } from "../src/event.js";
 import { makePcmWoice, makePtvWoice } from "./helpers.js";
 
@@ -109,6 +109,25 @@ it("toneKey portamento glides", () => {
   expect(mid).toBeLessThan(EVENTDEFAULT_KEY + 120);
   for (let i = 0; i < 100; i++) u.toneIncrementKey();
   expect(u.toneIncrementKey()).toBe(EVENTDEFAULT_KEY + 120);
+});
+
+it("readV1x keeps the assigned name size (7) like C++", () => {
+  // C++ Read_v1x は _name_buf に名前をコピーするが _name_size は変えない (初期値 7 のまま)
+  const io = new MemoryIo();
+  ioPutInt32LE(io, 20);
+  ioPutAsciiString(io, "ABCDEFGH");
+  io.write(new Uint8Array(8), 1, 8); // 残り 8 バイトはゼロ
+  ioPutU16LE(io, 1); // type PCM
+  ioPutU16LE(io, 3); // group
+  io.seek(0, 0);
+  const u = new Unit();
+  const g = { value: -1 };
+  expect(u.readV1x(io, g)).toBe(true);
+  expect(u.name).toBe("ABCDEFGH");
+  // 再保存時は最初の 7 バイトだけが書き出される
+  expect(u.nameBufSize).toBe(7);
+  expect(u.isNameBuf()).toBe(true);
+  expect(g.value).toBe(3);
 });
 
 it("readV3x parses group", () => {

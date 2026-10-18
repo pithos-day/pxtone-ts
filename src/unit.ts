@@ -47,6 +47,8 @@ export class Unit {
   private _bOperated = true;
   private _bPlayed = true;
   private _name = "no name";
+  // C++ _name_size (割り当てられた名前サイズ)。コンストラクタの "no name" で 7
+  private _nameBufSize = "no name".length;
   private _keyNow = EVENTDEFAULT_KEY;
   private _keyStart = EVENTDEFAULT_KEY;
   private _keyMargin = 0;
@@ -101,18 +103,21 @@ export class Unit {
     return this._pWoice;
   }
 
-  setNameBuf(name: string | Uint8Array): boolean {
-    const size = name.length;
-    if (size > PXTN_MAX_TUNEWOICENAME) return false;
-    if (typeof name === "string") this._name = name;
-    else this._name = asciiBytesToString(name);
+  setNameBuf(name: string | Uint8Array, bufSize?: number): boolean {
+    const size = bufSize ?? name.length;
+    if (size < 0 || size > PXTN_MAX_TUNEWOICENAME) return false;
+    this._name = typeof name === "string" ? name : asciiBytesToString(name);
+    this._nameBufSize = size;
     return true;
   }
   get name(): string {
     return this._name;
   }
+  get nameBufSize(): number {
+    return this._nameBufSize;
+  }
   isNameBuf(): boolean {
-    return this._name.length > 0;
+    return this._nameBufSize > 0;
   }
 
   setOperated(b: boolean): void {
@@ -295,7 +300,9 @@ export class Unit {
     if (readName) {
       const name = ioGetBytes(io, 16);
       if (name === null) return null;
-      this.setNameBuf(name);
+      // C++ Read_v1x は _name_buf にコピーするが _name_size は変えない (初期値 7 のまま)。
+      // 表示内容のみ差し替え、書き出し長は nameBufSize (=7) のまま扱う
+      this._name = asciiBytesToString(name);
     }
     const type = ioGetU16LE(io);
     if (type === null) return null;

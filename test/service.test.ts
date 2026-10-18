@@ -87,6 +87,54 @@ it("rejects anti operation tag", () => {
   expect(s.read(io)).toBe(PxtnErr.ANTI_OPERATION);
 });
 
+// バイト列中に ASCII 文字列が現れるか (ファイルチャンクの存在確認用)
+function includesAscii(bytes: Uint8Array, text: string): boolean {
+  const needle = Array.from(text, (c) => c.charCodeAt(0));
+  outer: for (let i = 0; i + needle.length <= bytes.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (bytes[i + j] !== needle[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+it("writes all-NUL assigned names back as assi chunks like C++", () => {
+  const s = new Service();
+  expect(s.initCollage(4096)).toBe(PxtnErr.OK);
+  const ioW = new MemoryIo();
+  makePtvWoice().ptvWrite(ioW);
+  ioW.seek(0, 0);
+  expect(s.woiceRead(0, ioW, WoiceType.PTV)).toBe(PxtnErr.OK);
+  s.unitAddNew();
+  // 全 NUL の 16 バイト名。C++ は _name_size=16 を保持するためチャンクを再出力する
+  s.woiceGet(0)!.setNameBuf(new Uint8Array(16), 16);
+  s.unitGet(0)!.setNameBuf(new Uint8Array(16), 16);
+
+  const io = new MemoryIo();
+  expect(s.write(io, false, 0)).toBe(PxtnErr.OK);
+  const bytes = io.toUint8Array();
+  expect(includesAscii(bytes, "assiWOIC")).toBe(true);
+  expect(includesAscii(bytes, "assiUNIT")).toBe(true);
+
+  // 読み直しても割り当てサイズが残り、再書き出しでチャンクが消えない
+  const s2 = new Service();
+  expect(s2.initCollage(4096)).toBe(PxtnErr.OK);
+  io.seek(0, 0);
+  expect(s2.read(io)).toBe(PxtnErr.OK);
+  expect(s2.woiceGet(0)!.isNameBuf()).toBe(true);
+  expect(s2.unitGet(0)!.isNameBuf()).toBe(true);
+  // 表示系 API は先頭 NUL までの長さのまま (getNameBuf/nameSize は変えない)
+  expect(s2.woiceGet(0)!.nameSize).toBe(0);
+  expect(s2.unitGet(0)!.name).toBe("");
+
+  const io2 = new MemoryIo();
+  expect(s2.write(io2, false, 0)).toBe(PxtnErr.OK);
+  const bytes2 = io2.toUint8Array();
+  expect(includesAscii(bytes2, "assiWOIC")).toBe(true);
+  expect(includesAscii(bytes2, "assiUNIT")).toBe(true);
+});
+
 it("clears partially loaded data when read fails", () => {
   const s = new Service();
   expect(s.initCollage(4096)).toBe(PxtnErr.OK);

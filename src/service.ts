@@ -775,7 +775,7 @@ export class Service {
 
   private _ioAssiUnitR(desc: MemoryIo): PxtnErr {
     return this._ioAssiNameR(desc, PXTN_MAX_TUNE_UNIT_NAME, this._unitNum, (index, name) =>
-      this._units[index]!.setNameBuf(name) ? PxtnErr.OK : PxtnErr.FATAL,
+      this._units[index]!.setNameBuf(name, PXTN_MAX_TUNE_UNIT_NAME) ? PxtnErr.OK : PxtnErr.FATAL,
     );
   }
 
@@ -1113,25 +1113,30 @@ export class Service {
     return PxtnErr.OK;
   }
 
-  // 名前付きアイテムの書き込み (size=20: u16 index + u16 reserved + 名前)
-  private _ioAssiNameW(desc: MemoryIo, idx: number, nameLen: number, byteAt: (i: number) => number): boolean {
+  // 名前付きアイテムの書き込み (size=20: u16 index + u16 reserved + 固定 16 バイト名)。
+  // C++ は name_size バイトを memcpy し、残りはゼロのまま固定長で書く
+  private _ioAssiNameW(desc: MemoryIo, idx: number, byteAt: (i: number) => number): boolean {
     if (!this._bInit) return false;
     ioPutInt32LE(desc, 20);
     ioPutU16LE(desc, idx);
     ioPutU16LE(desc, 0);
-    for (let i = 0; i < nameLen; i++) ioPutU8(desc, byteAt(i));
+    for (let i = 0; i < 16; i++) ioPutU8(desc, byteAt(i));
     return true;
   }
 
   private _ioAssiWoiceW(desc: MemoryIo, idx: number): boolean {
-    if (this._woices[idx]!.nameSize > PXTN_MAX_TUNEWOICENAME) return false;
-    const name = this._woices[idx]!.getNameBuf();
-    return this._ioAssiNameW(desc, idx, PXTN_MAX_TUNEWOICENAME, (i) => (i < name.length ? name[i]! : 0));
+    const woice = this._woices[idx]!;
+    const name = woice.getNameBuf();
+    const size = woice.nameBufSize;
+    if (size > PXTN_MAX_TUNEWOICENAME) return false;
+    return this._ioAssiNameW(desc, idx, (i) => (i < size && i < name.length ? name[i]! : 0));
   }
 
   private _ioAssiUnitW(desc: MemoryIo, idx: number): boolean {
-    const name = this._units[idx]!.name;
-    return this._ioAssiNameW(desc, idx, PXTN_MAX_TUNE_UNIT_NAME, (i) => (i < name.length ? name.charCodeAt(i) : 0));
+    const unit = this._units[idx]!;
+    const name = unit.name;
+    const size = unit.nameBufSize;
+    return this._ioAssiNameW(desc, idx, (i) => (i < size && i < name.length ? name.charCodeAt(i) : 0));
   }
 
   private _ioUnitNumW(desc: MemoryIo): boolean {

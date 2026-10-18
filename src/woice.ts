@@ -147,6 +147,8 @@ function releaseVoiceUnit(unit: VoiceUnit): void {
 export class Woice {
   private _voiceNum = 0;
   private _name: Uint8Array = new Uint8Array(0);
+  // C++ _name_size (割り当てられた名前サイズ)。全 NUL 名でも 16 のままチャンクを再出力する
+  private _nameBufSize = 0;
   private _type = WoiceType.None;
   private _voices: VoiceUnit[] = [];
   private _voinsts: VoiceInstance[] = [];
@@ -183,6 +185,7 @@ export class Woice {
     this._name = new Uint8Array(PXTN_MAX_TUNEWOICENAME);
     this._name.fill(0);
     if (size) this._name.set(bytes.subarray(0, size));
+    this._nameBufSize = size;
     return true;
   }
 
@@ -190,6 +193,12 @@ export class Woice {
     return this._name;
   }
 
+  // C++ get_name_buf の *p_buf_size 相当 (割り当てられた名前サイズ)
+  get nameBufSize(): number {
+    return this._nameBufSize;
+  }
+
+  // 先頭 NUL までの長さ (表示用)
   get nameSize(): number {
     for (let i = 0; i < this._name.length; i++) {
       if (this._name[i] === 0) return i;
@@ -198,7 +207,7 @@ export class Woice {
   }
 
   isNameBuf(): boolean {
-    return this.nameSize > 0;
+    return this._nameBufSize > 0;
   }
 
   voiceAllocate(voiceNum: number): boolean {
@@ -240,6 +249,7 @@ export class Woice {
     if (!dst.voiceAllocate(this._voiceNum)) return false;
     dst._type = this._type;
     dst._name = new Uint8Array(this._name);
+    dst._nameBufSize = this._nameBufSize;
     for (let v = 0; v < this._voiceNum; v++) {
       const s = this._voices[v]!;
       const d = dst._voices[v]!;
