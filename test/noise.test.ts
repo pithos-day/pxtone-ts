@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { MemoryIo, ioPutAsciiString } from "../src/data.js";
+import { MemoryIo, ioPutAsciiString, ioPutU8 } from "../src/data.js";
 import { Noise, WaveType } from "../src/noise.js";
 import { PxtnErr } from "../src/error.js";
 
@@ -77,6 +77,21 @@ it("rejects unsupported version", () => {
   // ver > 最新 → fmt_new
   io.seek(0, 0);
   expect(n.read(io)).toBe(PxtnErr.FMT_NEW);
+});
+
+it("releases partial state when read fails like C++", () => {
+  const io = new MemoryIo();
+  ioPutAsciiString(io, "PTNOISE-");
+  io.write(new Uint8Array([0x62, 0x03, 0x33, 0x01]), 1, 4); // _ver 20120418 (LE)
+  ioPutU8(io, 0); // smp_num_44k = 0 (varint)
+  ioPutU8(io, 1); // unit_num = 1
+  // ここで終端: flags が読めず DESC_R になる
+  io.seek(0, 0);
+  const n = new Noise();
+  expect(n.read(io)).toBe(PxtnErr.DESC_R);
+  // C++ は失敗時 Release() するため部分状態 (unit_num=1) が残らない
+  expect(n.unitNum).toBe(0);
+  expect(n.getUnit(0)).toBeNull();
 });
 
 it("fix clamps out-of-range values", () => {

@@ -226,6 +226,13 @@ export class Noise {
   }
 
   read(io: MemoryIo): PxtnErr {
+    const res = this._readCore(io);
+    // C++ は失敗時に Release() して _unit_num=0 に戻す (部分状態を残さない)
+    if (res !== PxtnErr.OK) this.release();
+    return res;
+  }
+
+  private _readCore(io: MemoryIo): PxtnErr {
     this.release();
     const code = ioGetAsciiExact(io, 8);
     if (code === null) return PxtnErr.DESC_R;
