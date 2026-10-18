@@ -219,9 +219,10 @@ export class Pcm {
     const workSize = head + body + tail;
 
     if (this._ch === 2 && this._bps === 16) {
-      this._smpHead = head / 4;
-      this._smpBody = body / 4;
-      this._smpTail = tail / 4;
+      // C++ は int 同士の除算 (head / 4) で小数部を切り捨てる
+      this._smpHead = Math.trunc(head / 4);
+      this._smpBody = Math.trunc(body / 4);
+      this._smpTail = Math.trunc(tail / 4);
       const sampleNum = Math.trunc(workSize / 4);
       const size = sampleNum * 4;
       const work = new Uint8Array(size);
@@ -243,9 +244,10 @@ export class Pcm {
       }
       this._pSmp = work;
     } else {
-      this._smpHead = head / 2;
-      this._smpBody = body / 2;
-      this._smpTail = tail / 2;
+      // C++ は int 同士の除算 (head / 2) で小数部を切り捨てる
+      this._smpHead = Math.trunc(head / 2);
+      this._smpBody = Math.trunc(body / 2);
+      this._smpTail = Math.trunc(tail / 2);
       const sampleNum = Math.trunc(workSize / 2);
       const size = sampleNum * 2;
       const work = new Uint8Array(size);

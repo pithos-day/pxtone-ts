@@ -122,3 +122,36 @@ it("convertVolume scales samples", () => {
   expect(dv.getInt16(0, true)).toBe(500);
   expect(dv.getInt16(4, true)).toBe(1500);
 });
+
+it("truncates head/body/tail with C++ int division on sps conversion", () => {
+  // 44100 -> 22051 では再スケール後の body バイト数が 4 や 2 で割り切れない。
+  // C++ は _smp_head/body/tail = byte / 4 (または / 2) の int 除算のため小数部が落ちる
+  const st16 = new Pcm();
+  st16.create(2, 44100, 16, 6); // 24 bytes -> 13 -> 13/4 = 3
+  expect(st16.convertSamplePerSecond(22051)).toBe(true);
+  expect(st16.sps).toBe(22051);
+  expect(st16.smpBody).toBe(3); // 旧実装は 3.25
+  expect(st16.totalSampleNum).toBe(6);
+  expect(st16.bufSize).toBe(12);
+
+  const mono16 = new Pcm();
+  mono16.create(1, 44100, 16, 6); // 12 bytes -> 7 -> 7/2 = 3
+  expect(mono16.convertSamplePerSecond(22051)).toBe(true);
+  expect(mono16.smpBody).toBe(3); // 旧実装は 3.5
+  expect(mono16.totalSampleNum).toBe(3);
+  expect(mono16.bufSize).toBe(6);
+
+  const st8 = new Pcm();
+  st8.create(2, 44100, 8, 6); // 12 bytes -> 7 -> 7/2 = 3
+  expect(st8.convertSamplePerSecond(22051)).toBe(true);
+  expect(st8.smpBody).toBe(3); // 旧実装は 3.5
+  expect(st8.totalSampleNum).toBe(6);
+  expect(st8.bufSize).toBe(6);
+
+  // mono8 は /1 のため元から整数 (回帰確認)
+  const mono8 = new Pcm();
+  mono8.create(1, 44100, 8, 6); // 6 bytes -> 4 -> 4/1 = 4
+  expect(mono8.convertSamplePerSecond(22051)).toBe(true);
+  expect(mono8.smpBody).toBe(4);
+  expect(mono8.bufSize).toBe(4);
+});
