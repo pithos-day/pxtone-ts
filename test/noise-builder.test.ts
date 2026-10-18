@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Noise, WaveType, type NoiseOscillator } from "../src/noise.js";
-import { NoiseBuilder } from "../src/noise-builder.js";
+import { NoiseBuilder, rdmIndexFromOffset } from "../src/noise-builder.js";
 import { MemoryIo } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
 
@@ -256,4 +256,41 @@ it("builds the bass4.ptnoise fixture as audible noise (freq: Random offset=100)"
   // 40ms のフルスケール減衰ノイズ → 以後エンベロープにより無音
   expect(samples.reduce((max, v) => Math.max(max, Math.abs(v)), 0)).toBe(32767);
   expect(samples.slice(4000).every((v) => v === 0)).toBe(true);
+});
+
+// ---- float32 パラメータの rdm_index 回帰テスト (pxtnPulse_NoiseBuilder.cpp:73-86) ----
+// C++ の osc パラメータは float のため、(float)offset/100 の float 除算と
+// 44100.0 (double) の積で rdm_index を求める。double で計算すると 1001 値中 46 値で
+// 1 ずれる (例: offset=1% で 441 vs 本家 440)。
+
+it("matches the C++ float32 rdm_index model for every file offset (0..1000)", () => {
+  for (let w = 0; w <= 1000; w++) {
+    // ファイル値 w は read で float フィールド fround(w/10) になる
+    const field = Math.fround(Math.fround(w) / 10);
+    // C++: (int32_t)( (double)44100 * (float)(field / 100) )
+    const expected = Math.trunc(44100 * Math.fround(field / 100));
+    expect(rdmIndexFromOffset(w / 10), `offset=${w}`).toBe(expected);
+  }
+  // offset=100% は本家だと 44100 で配列外。移植は生値を返し、参照側で 0 に折り返す
+  expect(rdmIndexFromOffset(100)).toBe(44100);
+});
+
+it("wraps the rdm_index=44100 boundary slot to the offset=0 phase", () => {
+  // 本家は offset=100% で rdm_index=44100 の配列外を読む (未定義動作)。
+  // 移植は 0 に折り返すため offset=0 と同一の決定論的な出力になる
+  const nb = new NoiseBuilder();
+  expect(nb.init()).toBe(true);
+  const render = (offset: number): number[] =>
+    sample16Of(
+      nb.buildNoise(
+        makeDesign({ type: WaveType.Random, freq: 44100, volume: 100, offset, bRev: false }, NONE_OSC, NONE_OSC),
+        1,
+        44100,
+        16,
+      )!,
+    );
+  const off100 = render(100);
+  const off0 = render(0);
+  expect(off100).toEqual(off0);
+  expect(off100.some((v) => v !== 0)).toBe(true);
 });

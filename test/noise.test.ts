@@ -39,9 +39,34 @@ it("round trips PTN blob", () => {
   expect(u.main.type).toBe(WaveType.Saw);
   expect(u.main.freq).toBe(440.5);
   expect(u.main.volume).toBe(88.5);
-  expect(u.main.offset).toBe(12.3);
+  // C++ のフィールドは float のため、12.3 は float32 値として読み戻される
+  expect(u.main.offset).toBe(Math.fround(12.3));
   expect(u.freq.bRev).toBe(true);
   expect(n.compare(m)).toBe(0);
+});
+
+it("round-trips float32 oscillator values for every file offset", () => {
+  // C++ は osc パラメータを float で保持し、書き出しも float 乗算 (int)(freq*10) のため、
+  // 読込→保存の往復でファイル値 (offset*10) が変わらないことを全 1001 値で確認する
+  for (let w = 0; w <= 1000; w++) {
+    const n = new Noise();
+    n.setSmpNum44k(441);
+    n.allocate(1, 1);
+    const u = n.getUnit(0)!;
+    u.bEnable = true;
+    u.enves = [{ x: 0, y: 100 }];
+    u.main = { type: WaveType.Sine, freq: 100, volume: 100, offset: w / 10, bRev: false };
+
+    const io = new MemoryIo();
+    expect(n.write(io), `offset=${w}`).toBe(true);
+    const m = new Noise();
+    io.seek(0, 0);
+    expect(m.read(io), `offset=${w}`).toBe(PxtnErr.OK);
+    // read は float32 へ丸めて保持する
+    expect(m.getUnit(0)!.main.offset, `offset=${w}`).toBe(Math.fround(w / 10));
+    // write 側も float 乗算でなければ 398/1001 の値で 1 小さく保存されてしまう
+    expect(n.compare(m), `offset=${w}`).toBe(0);
+  }
 });
 
 it("rejects unsupported version", () => {

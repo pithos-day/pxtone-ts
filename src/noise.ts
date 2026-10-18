@@ -3,6 +3,7 @@
 
 import { PxtnErr } from "./error.js";
 import { MemoryIo, SEEK_CUR, dataCheckVSize, dataReadV, dataWriteV, ioGetAsciiExact, ioGetInt8, ioGetUint32LE, ioPutAsciiString, ioPutU8, ioPutUint32LE } from "./data.js";
+import { f32Div, f32Mul } from "./float32.js";
 import type { PulsePoint } from "./osc.js";
 
 export enum WaveType {
@@ -123,9 +124,10 @@ export class Noise {
     const vals: number[] = [
       osc.type,
       osc.bRev ? 1 : 0,
-      Math.trunc(osc.freq * 10),
-      Math.trunc(osc.volume * 10),
-      Math.trunc(osc.offset * 10),
+      // C++ は float フィールドのまま (int)(freq * 10) と float 乗算して切り捨てる
+      Math.trunc(f32Mul(osc.freq, 10)),
+      Math.trunc(f32Mul(osc.volume, 10)),
+      Math.trunc(f32Mul(osc.offset, 10)),
     ];
     for (const v of vals) {
       if (!dataWriteV(io, v)) return null;
@@ -142,15 +144,16 @@ export class Noise {
     const reverse = dataReadV(io);
     if (reverse === null) return PxtnErr.DESC_R;
     osc.bRev = reverse !== 0;
+    // C++ のフィールドは float のため、float 除算 ((float)work / 10) に合わせて保持する
     const freq = dataReadV(io);
     if (freq === null) return PxtnErr.DESC_R;
-    osc.freq = freq / 10;
+    osc.freq = f32Div(freq, 10);
     const volume = dataReadV(io);
     if (volume === null) return PxtnErr.DESC_R;
-    osc.volume = volume / 10;
+    osc.volume = f32Div(volume, 10);
     const offset = dataReadV(io);
     if (offset === null) return PxtnErr.DESC_R;
-    osc.offset = offset / 10;
+    osc.offset = f32Div(offset, 10);
     return PxtnErr.OK;
   }
 
@@ -358,10 +361,11 @@ function newUnit(): NoiseUnit {
 }
 
 function compareOsci(a: NoiseOscillator, b: NoiseOscillator): number {
+  // C++ のフィールドは float のため、double で保持した値も float32 に丸めて比較する
   if (a.type !== b.type) return 1;
-  if (a.freq !== b.freq) return 1;
-  if (a.volume !== b.volume) return 1;
-  if (a.offset !== b.offset) return 1;
+  if (Math.fround(a.freq) !== Math.fround(b.freq)) return 1;
+  if (Math.fround(a.volume) !== Math.fround(b.volume)) return 1;
+  if (Math.fround(a.offset) !== Math.fround(b.offset)) return 1;
   if (a.bRev !== b.bRev) return 1;
   return 0;
 }

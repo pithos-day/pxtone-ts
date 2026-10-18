@@ -5,6 +5,7 @@ import { Noise, WaveType, type NoiseUnit } from "./noise.js";
 import { Frequency } from "./frequency.js";
 import { Oscillator, type PulsePoint } from "./osc.js";
 import { PxtnErr } from "./error.js";
+import { f32Div } from "./float32.js";
 
 const _BASIC_SPS = 44100.0;
 const _BASIC_FREQUENCY = 100.0;
@@ -95,6 +96,14 @@ function sampleRandom(osc: _Oscillator): number {
   return osc.rdmStart;
 }
 
+// 本家 _set_ocsillator の rdm_index 初期値。
+// C++ は (int32_t)( (double)_smp_num_rand * ( p_from->offset / 100 ) ) で、
+// offset は float フィールド、除算は float 演算のため f32Div で emulation する。
+// offset=100 では 44100 (= _smp_num_rand) を返す (本家は配列外を 1 要素読むが再現しない)。
+export function rdmIndexFromOffset(offset: number): number {
+  return Math.trunc(_smp_num_rand * f32Div(offset, 100));
+}
+
 function setOscillator(
   to: _Oscillator,
   from: NoiseUnit["main"],
@@ -106,17 +115,20 @@ function setOscillator(
   else if (from.type === WaveType.Random2) to.ranType = _RandomType.Rect;
   else to.ranType = _RandomType.None;
 
-  to.increment = (_BASIC_SPS / sps) * (from.freq / _BASIC_FREQUENCY);
+  // C++ は (_BASIC_SPS / sps) * (float freq / 100.0)。除算は double (_BASIC_FREQUENCY は 100.0)
+  to.increment = (_BASIC_SPS / sps) * (Math.fround(from.freq) / _BASIC_FREQUENCY);
   if (to.ranType !== _RandomType.None) to.offset = 0;
-  else to.offset = _smp_num * (from.offset / 100);
-  to.volume = from.volume / 100;
+  // C++ は (double)_smp_num * (float offset / 100)。積は double のため丸めない
+  else to.offset = _smp_num * f32Div(from.offset, 100);
+  to.volume = f32Div(from.volume, 100);
   to.pSmp = tbl;
   to.bReverse = from.bRev;
   to.rdmStart = 0;
   // 本家 C++ は offset=100 のとき rdm_index がちょうど _smp_num_rand に達し p_tbl_rand の
   // 範囲外を 1 要素読む (pxtnPulse_NoiseBuilder.cpp _set_ocsillator; 未定義動作)。
   // ここでは周期表として 0 に折り返し、オシレータ位相として offset=100 ≡ offset=0 と定義する。
-  to.rdmIndex = ((Math.trunc(_smp_num_rand * (from.offset / 100)) % _smp_num_rand) + _smp_num_rand) % _smp_num_rand;
+  const rawRdmIndex = rdmIndexFromOffset(from.offset);
+  to.rdmIndex = ((rawRdmIndex % _smp_num_rand) + _smp_num_rand) % _smp_num_rand;
   to.rdmMargin = sampleTable(tblRand, to.rdmIndex);
 }
 
