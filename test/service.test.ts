@@ -154,6 +154,23 @@ it("clears partially loaded data when read fails", () => {
   expect(s.unitNum).toBe(0);
 });
 
+it("treats negative num UNIT as FMT_UNKNOWN like C++ int16", () => {
+  const s = new Service();
+  expect(s.initCollage(4096)).toBe(PxtnErr.OK);
+  const io = new MemoryIo();
+  putV5ProjectHeader(io);
+  putMasterV5(io);
+  ioPutAsciiString(io, "num UNIT");
+  ioPutInt32LE(io, 4);
+  ioPutU16LE(io, 0xffff); // int16 で -1 になる
+  ioPutU16LE(io, 0);
+  ioPutAsciiString(io, "pxtoneND");
+  ioPutInt32LE(io, 0);
+  io.seek(0, 0);
+  // C++ は int16_t num < 0 を FMT_UNKNOWN とする (u16 の 65535 は FMT_NEW ではない)
+  expect(s.read(io)).toBe(PxtnErr.FMT_UNKNOWN);
+});
+
 it("rejects unknown tags while pre-counting events", () => {
   const s = new Service();
   expect(s.init()).toBe(PxtnErr.OK);

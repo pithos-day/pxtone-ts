@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Service } from "../src/service.js";
-import { MemoryIo } from "../src/data.js";
+import { MemoryIo, ioPutFloatLE, ioPutInt32LE, ioPutU16LE, ioPutUint32LE } from "../src/data.js";
 import { PxtnErr } from "../src/error.js";
 import { Woice, WoiceType, VoiceType, PTV_VOICEFLAG_WAVELOOP } from "../src/woice.js";
 import { defaultOggvDecoder, convertOggvToPcm } from "../src/oggv.js";
@@ -74,6 +74,23 @@ it("ioMateOggvW/R round trips", () => {
   expect(vc2.oggv!.data).toEqual(toneOgg);
   expect(vc2.oggv!.ch).toBe(2);
   expect(vc2.oggv!.sps).toBe(44100);
+});
+
+it("rejects mateOGGV with data size 0 like C++", () => {
+  const io = new MemoryIo();
+  ioPutInt32LE(io, 24); // size (read では未使用)
+  ioPutU16LE(io, 0); // xxx
+  ioPutU16LE(io, 0x4500); // basic_key
+  ioPutUint32LE(io, 0); // voice_flags
+  ioPutFloatLE(io, 1.0); // tuning
+  ioPutInt32LE(io, 2); // ch
+  ioPutInt32LE(io, 44100); // sps
+  ioPutInt32LE(io, 0); // smp_num
+  ioPutInt32LE(io, 0); // data_size = 0
+  io.seek(0, 0);
+  const w = new Woice();
+  // C++ pxtnPulse_Oggv::ogg_read はサイズ 0 を desc_r で拒否する
+  expect(w.ioMateOggvR(io)).toBe(PxtnErr.DESC_R);
 });
 
 it("decodeOggv converts ogg to PCM", async () => {

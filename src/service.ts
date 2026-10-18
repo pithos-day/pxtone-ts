@@ -784,10 +784,12 @@ export class Service {
     const size = ioGetInt32LE(desc);
     if (size === null) return PxtnErr.DESC_R;
     if (size !== 4) return PxtnErr.FMT_UNKNOWN;
-    const num = ioGetU16LE(desc);
+    const rawNum = ioGetU16LE(desc);
     const reserved = ioGetU16LE(desc);
-    if (num === null || reserved === null) return PxtnErr.DESC_R;
+    if (rawNum === null || reserved === null) return PxtnErr.DESC_R;
     if (reserved) return PxtnErr.FMT_UNKNOWN;
+    // C++ は int16_t num として読むため、負値 (0x8000 以上) は FMT_UNKNOWN になる
+    const num = (rawNum << 16) >> 16;
     if (num > this._unitMax) return PxtnErr.FMT_NEW;
     if (num < 0) return PxtnErr.FMT_UNKNOWN;
     pNum.value = num;

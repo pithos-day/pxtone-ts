@@ -900,6 +900,8 @@ export class Woice {
     const dataSize = ioGetInt32LE(io);
     if (ch === null || sps === null || smpNum === null || dataSize === null) return PxtnErr.DESC_R;
     if (dataSize < 0) return PxtnErr.FMT_UNKNOWN;
+    // C++ pxtnPulse_Oggv::ogg_read はサイズ 0 を desc_r で拒否する
+    if (dataSize === 0) return PxtnErr.DESC_R;
     const data = ioGetBytes(io, dataSize);
     if (data === null) return PxtnErr.DESC_R;
     if (!this.voiceAllocate(1)) return PxtnErr.MEMORY;
